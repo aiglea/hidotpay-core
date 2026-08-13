@@ -31,6 +31,16 @@ test('web logout uses a dedicated post-sign-out redirect URI', () => {
   assert.match(read('app/index.web.tsx'), /signOut\(webPostLogoutRedirectUri\)/);
 });
 
+test('release version is incremented and consistent across app metadata', () => {
+  const packageVersion = JSON.parse(read('package.json')).version;
+  const packageLockVersion = JSON.parse(read('package-lock.json')).version;
+
+  assert.match(packageVersion, /^\d+\.\d+\.\d+$/);
+  assert.equal(packageLockVersion, packageVersion);
+  assert.match(read('app.config.js'), new RegExp(`version: '${packageVersion.replaceAll('.', '\\.')}'`));
+  assert.match(read('../CHANGELOG.md'), new RegExp(`## ${packageVersion.replaceAll('.', '\\.')}`));
+});
+
 test('README gives Traditional Chinese web and Android instructions without secrets', () => {
   const readme = read('README.md');
   assert.match(readme, /npm install/);

@@ -6,7 +6,7 @@ module.exports = {
   expo: {
     name: 'hidotpay Login Test',
     slug: 'hidotpay-login-test',
-    version: '0.1.0',
+    version: '0.1.1',
     orientation: 'portrait',
     scheme: 'hidotpay',
     userInterfaceStyle: 'light',
