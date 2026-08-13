@@ -39,6 +39,7 @@ const withdrawalBody = z.object({
 }).strict();
 
 type BuildAppOptions = {
+  developmentApiKey?: string;
   environment: Environment;
   logtoAudience?: string;
   logtoIssuer?: string;
@@ -50,6 +51,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
   const app = Fastify({ logger: false });
   const authenticate = createAuthenticator({
     environment: options.environment,
+    developmentApiKey: options.developmentApiKey,
     host: '127.0.0.1',
     logtoAudience: options.logtoAudience,
     logtoIssuer: options.logtoIssuer,

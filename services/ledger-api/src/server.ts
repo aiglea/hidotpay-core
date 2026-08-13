@@ -10,6 +10,7 @@ if (!config.databaseUrl) throw new Error('DATABASE_URL is required to start ledg
 const pool = createPool(config.databaseUrl);
 const app = buildApp({
   environment: config.environment,
+  developmentApiKey: config.developmentApiKey,
   logtoAudience: config.logtoAudience,
   logtoIssuer: config.logtoIssuer,
   repository: new PostgresLedgerRepository(pool),

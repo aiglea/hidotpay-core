@@ -129,6 +129,31 @@ test('balance endpoint rejects an account owned by another user', async (t) => {
   assert.equal(response.json().code, 'account_not_owned');
 });
 
+test('public development deployment requires its private development access key', async (t) => {
+  const repository = new InMemoryLedgerRepository();
+  repository.seedAsset({ code: 'USDT', decimals: 6 });
+  repository.seedAccount({ id: senderAccountId, ownerId: senderId, accountKind: 'user_available' });
+  const app = buildApp({
+    developmentApiKey: 'local-development-key',
+    environment: 'development',
+    repository,
+    withdrawalFeePolicy: fixedWithdrawalFeePolicy({ 'ethereum:USDT': '10000' }),
+  });
+  await app.ready();
+  t.after(() => app.close());
+
+  const denied = await app.inject({
+    method: 'GET', url: `/v1/accounts/${senderAccountId}/balances`, headers: { 'x-actor-id': senderId },
+  });
+  assert.equal(denied.statusCode, 401);
+
+  const allowed = await app.inject({
+    method: 'GET', url: `/v1/accounts/${senderAccountId}/balances`,
+    headers: { 'x-actor-id': senderId, 'x-hidotpay-dev-key': 'local-development-key' },
+  });
+  assert.equal(allowed.statusCode, 200);
+});
+
 test('confirmed chain deposit can only be credited by a chain worker and is deduplicated', async (t) => {
   const { app, repository } = await createFixture();
   t.after(() => app.close());

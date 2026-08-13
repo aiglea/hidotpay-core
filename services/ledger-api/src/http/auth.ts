@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'node:crypto';
+
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 
 import type { AppConfig } from '../config.js';
@@ -23,6 +25,12 @@ async function discoverJwks(issuer: string): Promise<ReturnType<typeof createRem
 export function createAuthenticator(config: AppConfig): (headers: Record<string, unknown>) => Promise<Actor> {
   if (config.environment !== 'production') {
     return async (headers) => {
+      if (config.developmentApiKey) {
+        const provided = headers['x-hidotpay-dev-key'];
+        const expected = Buffer.from(config.developmentApiKey);
+        const received = typeof provided === 'string' ? Buffer.from(provided) : undefined;
+        if (!received || received.length !== expected.length || !timingSafeEqual(received, expected)) throw new DomainError('unauthenticated');
+      }
       const actorId = headers['x-actor-id'];
       if (typeof actorId !== 'string' || !/^[A-Za-z0-9_-]{3,128}$/.test(actorId)) throw new DomainError('unauthenticated');
       const roleHeader = headers['x-actor-roles'];

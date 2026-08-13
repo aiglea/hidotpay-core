@@ -6,6 +6,7 @@ const required = [
   'docs/api.md',
   'docs/security.md',
   'docs/operations.md',
+  'docs/public-development-deployment.md',
   'openapi/openapi.yaml',
 ];
 

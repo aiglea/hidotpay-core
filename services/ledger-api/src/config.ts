@@ -2,6 +2,7 @@ export type Environment = 'development' | 'production' | 'test';
 
 export type AppConfig = {
   databaseUrl?: string;
+  developmentApiKey?: string;
   environment: Environment;
   host: string;
   logtoAudience?: string;
@@ -49,6 +50,7 @@ function parseWithdrawalFeeSchedule(value: string | undefined): Record<string, s
 export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
   const environment = parseEnvironment(env.NODE_ENV);
   const databaseUrl = env.DATABASE_URL;
+  const developmentApiKey = env.DEVELOPMENT_API_KEY;
   const logtoAudience = env.LOGTO_AUDIENCE;
   const logtoIssuer = env.LOGTO_ISSUER;
   const withdrawalFeeSchedule = parseWithdrawalFeeSchedule(env.WITHDRAWAL_FEE_SCHEDULE);
@@ -59,6 +61,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
 
   return {
     databaseUrl,
+    developmentApiKey,
     environment,
     host: parseHost(env.HOST, environment),
     logtoAudience,
