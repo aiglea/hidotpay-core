@@ -1,4 +1,4 @@
-# HidoTPay Financial Core v0.2.0
+# HidoTPay Financial Core v0.2.1
 
 HidoTPay 的中央託管帳本 API：平台內部轉帳、鏈上確認後充值入帳、提現凍結與審核結算。
 

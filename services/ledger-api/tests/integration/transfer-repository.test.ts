@@ -67,18 +67,32 @@ test('CockroachDB deposit and withdrawal lifecycle preserves a balanced ledger',
   const userId = randomUUID();
   const availableAccountId = randomUUID();
   const frozenAccountId = randomUUID();
-  const settlementAccountId = randomUUID();
-  const treasuryAccountId = randomUUID();
+  let settlementAccountId = '';
+  let treasuryAccountId = '';
   try {
     await applyMigrations(pool);
     await pool.query('INSERT INTO assets (code, display_name, decimals) VALUES ($1, $2, $3)', [assetCode, assetCode, 6]);
     await pool.query('INSERT INTO chain_assets (network, asset_code, contract_identifier, minimum_confirmations) VALUES ($1, $2, $3, $4)', ['ethereum', assetCode, 'integration-test-contract', 12]);
     await pool.query(
       `INSERT INTO accounts (id, owner_id, account_kind) VALUES
-       ($1, $2, 'user_available'), ($3, $2, 'user_frozen'),
-       ($4, 'platform:settlement', 'platform_settlement'), ($5, 'platform:treasury', 'platform_treasury')`,
-      [availableAccountId, userId, frozenAccountId, settlementAccountId, treasuryAccountId],
+       ($1, $2, 'user_available'), ($3, $2, 'user_frozen')`,
+      [availableAccountId, userId, frozenAccountId],
     );
+    await pool.query(
+      `INSERT INTO accounts (id, owner_id, account_kind) VALUES
+       ($1, 'platform:settlement', 'platform_settlement'), ($2, 'platform:treasury', 'platform_treasury')
+       ON CONFLICT (owner_id, account_kind) DO NOTHING`,
+      [randomUUID(), randomUUID()],
+    );
+    const platformAccounts = await pool.query<{ account_kind: string; id: string }>(
+      `SELECT id, account_kind FROM accounts
+       WHERE (owner_id = 'platform:settlement' AND account_kind = 'platform_settlement')
+          OR (owner_id = 'platform:treasury' AND account_kind = 'platform_treasury')`,
+    );
+    settlementAccountId = platformAccounts.rows.find((account) => account.account_kind === 'platform_settlement')?.id ?? '';
+    treasuryAccountId = platformAccounts.rows.find((account) => account.account_kind === 'platform_treasury')?.id ?? '';
+    assert.ok(settlementAccountId);
+    assert.ok(treasuryAccountId);
     const repository = new PostgresLedgerRepository(pool);
     const deposit = await repository.confirmDeposit({
       actorId: 'chain-worker-01', amountAtoms: '2000000', assetCode, blockHash: `block-${randomUUID()}`, blockHeight: '123456', confirmationCount: 12, contractIdentifier: 'integration-test-contract',
@@ -95,7 +109,10 @@ test('CockroachDB deposit and withdrawal lifecycle preserves a balanced ledger',
 
     assert.deepEqual(await repository.getBalances(availableAccountId), [{ assetCode, balanceAtoms: '990000' }]);
     assert.deepEqual(await repository.getBalances(frozenAccountId), [{ assetCode, balanceAtoms: '0' }]);
-    assert.deepEqual(await repository.getBalances(treasuryAccountId), [{ assetCode, balanceAtoms: '10000' }]);
+    assert.deepEqual(
+      (await repository.getBalances(treasuryAccountId)).filter((balance) => balance.assetCode === assetCode),
+      [{ assetCode, balanceAtoms: '10000' }],
+    );
     const postingSum = await pool.query<{ total: string }>('SELECT COALESCE(sum(amount_atoms), 0)::STRING AS total FROM ledger_postings');
     assert.equal(postingSum.rows[0]?.total, '0');
     assert.equal(deposit.created, true);

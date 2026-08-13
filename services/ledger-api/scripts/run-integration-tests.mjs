@@ -17,5 +17,6 @@ if (process.env.DATABASE_URL) {
 
 const result = spawnSync(process.execPath, [
   '--import', 'tsx', '--test', 'tests/integration/transfer-repository.test.ts',
+  '--test-concurrency=1',
 ], { stdio: 'inherit' });
 process.exit(result.status ?? 1);
