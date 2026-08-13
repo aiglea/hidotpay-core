@@ -26,6 +26,11 @@ test('web callback returns to the application home after Logto completes', () =>
   assert.match(read('app/callback.web.tsx'), /router\.replace\('\/'\)/);
 });
 
+test('web logout uses a dedicated post-sign-out redirect URI', () => {
+  assert.match(read('src/auth-config.ts'), /webPostLogoutRedirectUri = 'http:\/\/localhost:3000'/);
+  assert.match(read('app/index.web.tsx'), /signOut\(webPostLogoutRedirectUri\)/);
+});
+
 test('README gives Traditional Chinese web and Android instructions without secrets', () => {
   const readme = read('README.md');
   assert.match(readme, /npm install/);

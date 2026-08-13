@@ -2,7 +2,7 @@ import { useLogto } from '@logto/react';
 import { useEffect, useState } from 'react';
 
 import { LoginShell } from '../src/LoginShell';
-import { webRedirectUri } from '../src/auth-config';
+import { webPostLogoutRedirectUri, webRedirectUri } from '../src/auth-config';
 
 export default function WebHomeScreen() {
   const { error, getIdTokenClaims, isAuthenticated, isLoading, signIn, signOut } = useLogto();
@@ -29,7 +29,7 @@ export default function WebHomeScreen() {
 
   const beginSignOut = () => {
     setActionError(undefined);
-    void signOut(webRedirectUri).catch((reason: unknown) => {
+    void signOut(webPostLogoutRedirectUri).catch((reason: unknown) => {
       setActionError(reason instanceof Error ? reason.message : '無法完成登出，請稍後再試。');
     });
   };

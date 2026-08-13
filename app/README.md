@@ -20,7 +20,15 @@ npm run web
 http://localhost:3000/callback
 ```
 
-這個回調網址已在 Logto 設定中。如要把網頁伺服器改成其他埠號，請先在 Logto 的 SPA 應用程式加入對應的 `/callback` 網址，例如 `http://localhost:5173/callback`；不要自行假設已經開通。
+這個登入回調網址已在 Logto 設定中。如要把網頁伺服器改成其他埠號，請先在 Logto 的 SPA 應用程式加入對應的 `/callback` 網址，例如 `http://localhost:5173/callback`；不要自行假設已經開通。
+
+另外，為了讓「登出」後能自動回到 App 首頁，Logto SPA 應用程式的 **Post sign-out redirect URIs** 也必須加入：
+
+```text
+http://localhost:3000
+```
+
+這是和登入回調不同的設定欄位；沒有加入時，Logto 會拒絕登出並顯示 `post_logout_redirect_uri not registered`。
 
 ## 日後 Android APK
 
