@@ -22,6 +22,10 @@ test('routes use Logto hosted authentication and keep web and Android clients se
   assert.doesNotMatch(read('app/index.native.tsx'), /password/i);
 });
 
+test('web callback returns to the application home after Logto completes', () => {
+  assert.match(read('app/callback.web.tsx'), /router\.replace\('\/'\)/);
+});
+
 test('README gives Traditional Chinese web and Android instructions without secrets', () => {
   const readme = read('README.md');
   assert.match(readme, /npm install/);

@@ -4,7 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 export default function WebCallbackScreen() {
   const { error, isLoading } = useHandleSignInCallback(() => {
-    router.replace('..');
+    router.replace('/');
   });
 
   return (
