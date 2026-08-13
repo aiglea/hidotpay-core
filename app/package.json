@@ -1,0 +1,31 @@
+{
+  "name": "hidotpay-login-test",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "web": "expo start --web --port 3000",
+    "android": "expo start --android",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/project-contract.test.mjs"
+  },
+  "dependencies": {
+    "@logto/react": "latest",
+    "@logto/rn": "latest",
+    "@react-native-async-storage/async-storage": "latest",
+    "expo": "latest",
+    "expo-crypto": "latest",
+    "expo-router": "latest",
+    "expo-secure-store": "latest",
+    "expo-web-browser": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-native": "latest",
+    "react-native-web": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "latest",
+    "typescript": "latest"
+  }
+}
