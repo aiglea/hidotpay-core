@@ -1,0 +1,156 @@
+openapi: 3.1.0
+info:
+  title: HidoTPay Financial Core API
+  version: 0.2.0
+  description: |
+    中央託管帳本的第一階段 API。金額一律使用最小單位字串；不可使用小數或浮點數。
+    本文件不包含私鑰、簽名或鏈上廣播能力。
+servers:
+  - url: https://api.hidotpay.example/v1
+security:
+  - bearerAuth: []
+paths:
+  /accounts/{accountId}/balances:
+    get:
+      summary: 讀取本人帳戶餘額
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      responses:
+        '200': { description: 成功 }
+        '403': { $ref: '#/components/responses/Error' }
+  /internal-transfers:
+    post:
+      summary: HidoTPay 內部轉帳（不產生鏈上手續費）
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InternalTransfer' }
+      responses:
+        '201': { description: 已入帳 }
+        '200': { description: 同一請求重送，回傳原結果 }
+        '409': { $ref: '#/components/responses/Error' }
+  /deposits/confirmed:
+    post:
+      summary: 鏈上確認後，由鏈上工作程序入帳
+      description: 僅 chain_worker 角色可呼叫；以 network、transaction_hash、output_index 去重。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfirmedDeposit' }
+      responses:
+        '201': { description: 已入帳 }
+        '200': { description: 已處理過同一筆鏈上收款 }
+  /withdrawals:
+    post:
+      summary: 建立提現並凍結款項
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WithdrawalRequest' }
+      responses:
+        '201': { description: 等待審核 }
+        '200': { description: 同一請求重送，回傳原結果 }
+  /withdrawals/{withdrawalId}/approve:
+    post:
+      summary: 核准提現
+      description: 僅 finance_reviewer 角色可呼叫。
+      parameters:
+        - $ref: '#/components/parameters/WithdrawalId'
+      responses:
+        '200': { description: 已核准 }
+  /withdrawals/{withdrawalId}/settle:
+    post:
+      summary: 寫入鏈上已確認的提現結果
+      description: 僅 chain_worker 角色可呼叫。此端點不廣播交易，只接收已確認結果。
+      parameters:
+        - $ref: '#/components/parameters/WithdrawalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [transaction_hash]
+              properties: { transaction_hash: { type: string, minLength: 8, maxLength: 256 } }
+      responses:
+        '200': { description: 已結算 }
+  /withdrawals/{withdrawalId}/fail:
+    post:
+      summary: 未核准的提現解凍
+      description: 僅 chain_worker 角色可呼叫；核准後不可用此端點解凍，必須進人工對帳流程。
+      parameters:
+        - $ref: '#/components/parameters/WithdrawalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties: { reason: { type: string, minLength: 1, maxLength: 512 } }
+      responses:
+        '200': { description: 已解凍 }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    AccountId: { name: accountId, in: path, required: true, schema: { type: string, format: uuid } }
+    WithdrawalId: { name: withdrawalId, in: path, required: true, schema: { type: string, format: uuid } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 128 } }
+  responses:
+    Error:
+      description: 錯誤
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    InternalTransfer:
+      type: object
+      additionalProperties: false
+      required: [asset_code, amount_atoms, from_account_id, to_account_id]
+      properties:
+        asset_code: { type: string, example: USDT }
+        amount_atoms: { type: string, pattern: '^[1-9][0-9]*$', example: '1000000' }
+        from_account_id: { type: string, format: uuid }
+        to_account_id: { type: string, format: uuid }
+    ConfirmedDeposit:
+      type: object
+      additionalProperties: false
+      required: [network, transaction_hash, output_index, asset_code, destination_account_id, amount_atoms, confirmation_count, contract_identifier, block_height, block_hash]
+      properties:
+        network: { type: string, example: ethereum }
+        transaction_hash: { type: string }
+        contract_identifier: { type: string, description: 已驗證的原生資產或代幣合約識別 }
+        block_height: { type: string, pattern: '^[1-9][0-9]*$' }
+        block_hash: { type: string }
+        output_index: { type: integer, minimum: 0 }
+        asset_code: { type: string, example: USDT }
+        destination_account_id: { type: string, format: uuid }
+        amount_atoms: { type: string, pattern: '^[1-9][0-9]*$' }
+        confirmation_count: { type: integer, minimum: 1 }
+    WithdrawalRequest:
+      type: object
+      additionalProperties: false
+      required: [network, destination_address, asset_code, amount_atoms, from_account_id, frozen_account_id]
+      properties:
+        network: { type: string, example: ethereum }
+        destination_address: { type: string }
+        asset_code: { type: string, example: USDT }
+        amount_atoms: { type: string, pattern: '^[1-9][0-9]*$' }
+        from_account_id: { type: string, format: uuid }
+        frozen_account_id: { type: string, format: uuid }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: insufficient_funds }
+        message: { type: string, example: 請求無法處理 }
