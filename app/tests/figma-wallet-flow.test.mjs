@@ -23,5 +23,7 @@ test('Figma 錢包首頁僅提供 Ethereum 與 TRON 的真實充值流程', () =
   assert.match(home, /'tron'/);
   assert.match(home, /allocateDepositAddress/);
   assert.match(home, /topup-confirmation/);
+  assert.match(home, /submitInternalTransfer/);
+  assert.match(home, /send-confirm/);
   assert.doesNotMatch(home, /\$12,765\.00|0x1234abcd|T[A-Z0-9]{33}/);
 });

@@ -37,7 +37,7 @@ test('已登入使用者會進入錢包首頁，而非停留在登入測試殼',
   assert.match(read('app/index.native.tsx'), /<WalletHome/);
   assert.match(read('src/WalletHome.tsx'), /取得充值地址/);
   assert.match(read('src/WalletHome.tsx'), /多鏈充值/);
-  assert.doesNotMatch(read('src/WalletHome.tsx'), /submitInternalTransfer/);
+  assert.match(read('src/WalletHome.tsx'), /submitInternalTransfer/);
 });
 
 test('錢包服務網址是公開設定，不能是 App 內嵌密鑰', () => {
@@ -52,10 +52,14 @@ test('錢包首頁在桌面與窄螢幕可捲動，不會截斷充值流程', ()
   assert.match(walletHome, /page: \{[^}]*overflow: 'hidden'/);
 });
 
-test('第一期不會從錢包前台送出尚未開放的轉帳', () => {
+test('站內轉帳只轉給另一個 hidotpay 錢包，不會從 App 提領或做 P2P', () => {
   const walletHome = read('src/WalletHome.tsx');
-  assert.match(walletHome, /轉帳即將開放/);
-  assert.doesNotMatch(walletHome, /submitInternalTransfer/);
+  assert.match(walletHome, /submitInternalTransfer/);
+  assert.match(walletHome, /收款錢包編號/);
+  assert.match(walletHome, /檢查轉帳內容/);
+  assert.match(walletHome, /確認轉出/);
+  assert.match(walletHome, /不能轉帳給自己的錢包/);
+  assert.doesNotMatch(walletHome, /p2p|P2P|提領即將開放|轉帳即將開放/i);
 });
 
 test('交易紀錄只顯示安全欄位，並涵蓋載入、空白、失敗重試與下一頁狀態', () => {

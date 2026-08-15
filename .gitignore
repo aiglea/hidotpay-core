@@ -9,3 +9,4 @@ coverage/
 *.crt
 *.tsbuildinfo
 .DS_Store
+.wrangler/
