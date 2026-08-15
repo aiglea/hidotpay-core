@@ -38,10 +38,10 @@ export interface DepositCreditor {
 }
 
 export interface DepositScanStore {
+  assertNoOrphanedCredits(network: string): Promise<void>;
   cursor(network: string): Promise<ScanCursor | undefined>;
-  invalidateFrom(network: string, blockHeight: number): Promise<void>;
   saveCursor(network: string, cursor: ScanCursor): Promise<void>;
-  upsertObservation(observation: DepositObservation): Promise<boolean>;
+  upsertObservation(observation: DepositObservation): Promise<'creditable' | 'already_credited'>;
   markCredited(observation: DepositObservation): Promise<void>;
 }
 
@@ -59,17 +59,15 @@ export class DepositScanner {
 
   public async scan(targets: DepositTarget[], firstBlock: number): Promise<{ candidates: number; fromBlock: number; head: number; reorgRecovered: boolean }> {
     if (!Number.isSafeInteger(firstBlock) || firstBlock < 0) throw new Error('firstBlock must be a non-negative integer');
+    await this.store.assertNoOrphanedCredits(this.adapter.network);
     const head = await this.adapter.getHead();
+    const safeHead = head - this.config.reorgWindow;
+    if (safeHead < firstBlock) return { candidates: 0, fromBlock: firstBlock, head, reorgRecovered: false };
     const cursor = await this.store.cursor(this.adapter.network);
-    let reorgRecovered = false;
-    let fromBlock = cursor ? cursor.height + 1 : firstBlock;
-    if (cursor && await this.adapter.getBlockHash(cursor.height) !== cursor.blockHash) {
-      fromBlock = Math.max(firstBlock, cursor.height - this.config.reorgWindow);
-      await this.store.invalidateFrom(this.adapter.network, fromBlock);
-      reorgRecovered = true;
-    }
-    if (fromBlock > head) return { candidates: 0, fromBlock, head, reorgRecovered };
-    const toBlock = Math.min(head, fromBlock + (this.config.maxBlockRange ?? Number.MAX_SAFE_INTEGER) - 1);
+    if (cursor && await this.adapter.getBlockHash(cursor.height) !== cursor.blockHash) throw new Error('deep_chain_reorg_detected');
+    const fromBlock = cursor ? cursor.height + 1 : firstBlock;
+    if (fromBlock > safeHead) return { candidates: 0, fromBlock, head, reorgRecovered: false };
+    const toBlock = Math.min(safeHead, fromBlock + (this.config.maxBlockRange ?? Number.MAX_SAFE_INTEGER) - 1);
 
     let candidates = 0;
     for (const target of targets) {
@@ -89,15 +87,16 @@ export class DepositScanner {
           continue;
         }
         const observation = { ...event, accountId: target.accountId, assetCode: target.assetCode, confirmationCount, status: 'finalized_candidate' as const };
-        if (await this.store.upsertObservation(observation)) candidates += 1;
-        if (this.creditor) {
+        if (await this.store.upsertObservation(observation) === 'creditable') {
+          candidates += 1;
+          if (!this.creditor) continue;
           await this.creditor.credit(observation);
           await this.store.markCredited(observation);
         }
       }
     }
     await this.store.saveCursor(this.adapter.network, { blockHash: await this.adapter.getBlockHash(toBlock), height: toBlock });
-    return { candidates, fromBlock, head, reorgRecovered };
+    return { candidates, fromBlock, head, reorgRecovered: false };
   }
 
 }
@@ -106,26 +105,24 @@ export class InMemoryDepositScanStore implements DepositScanStore {
   private readonly cursors = new Map<string, ScanCursor>();
   private readonly values = new Map<string, StoredDepositObservation>();
 
+  public async assertNoOrphanedCredits(_network: string): Promise<void> {}
+
   public async cursor(network: string): Promise<ScanCursor | undefined> {
     const value = this.cursors.get(network);
     return value ? { ...value } : undefined;
-  }
-
-  public async invalidateFrom(network: string, blockHeight: number): Promise<void> {
-    for (const [key, observation] of this.values) {
-      if (observation.network === network && observation.blockHeight >= blockHeight) this.values.delete(key);
-    }
   }
 
   public async saveCursor(network: string, cursor: ScanCursor): Promise<void> {
     this.cursors.set(network, { ...cursor });
   }
 
-  public async upsertObservation(observation: DepositObservation): Promise<boolean> {
+  public async upsertObservation(observation: DepositObservation): Promise<'creditable' | 'already_credited'> {
     const key = this.key(observation);
-    if (this.values.has(key)) return false;
+    const existing = this.values.get(key);
+    if (existing?.status === 'credited') return 'already_credited';
+    if (existing) return 'creditable';
     this.values.set(key, { ...observation });
-    return true;
+    return 'creditable';
   }
 
   public async markCredited(observation: DepositObservation): Promise<void> {

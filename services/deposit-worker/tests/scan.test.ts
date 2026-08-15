@@ -25,7 +25,7 @@ const policy = new ChainAssetPolicyRegistry([{
   assetCode: 'USDT', contractIdentifier: 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj', decimals: 6, depositEnabled: true, feeAssetCode: 'TRX', minimumConfirmations: 3, network: 'tron-shasta', withdrawalEnabled: true,
 }]);
 
-test('scanner persists its cursor, only emits finalized official deposits, and deduplicates restart scans', async () => {
+test('scanner only scans through the safe head and never advances its cursor into the reorg window', async () => {
   const adapter = new FixtureAdapter();
   const store = new InMemoryDepositScanStore();
   const scanner = new DepositScanner(adapter, store, policy, { reorgWindow: 2 });
@@ -33,16 +33,17 @@ test('scanner persists its cursor, only emits finalized official deposits, and d
 
   const first = await scanner.scan([target], 7);
   assert.deepEqual(first, { candidates: 1, fromBlock: 7, head: 10, reorgRecovered: false });
+  assert.deepEqual(adapter.queries, [{ contractIdentifier: 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj', fromBlock: 7, toBlock: 8, watchedAddresses: [target.address] }]);
   assert.equal(store.observations().length, 1);
   assert.equal(store.observations()[0]?.status, 'finalized_candidate');
-  assert.equal((await store.cursor('tron-shasta'))?.height, 10);
+  assert.equal((await store.cursor('tron-shasta'))?.height, 8);
 
   const afterRestart = await scanner.scan([target], 7);
-  assert.deepEqual(afterRestart, { candidates: 0, fromBlock: 11, head: 10, reorgRecovered: false });
+  assert.deepEqual(afterRestart, { candidates: 0, fromBlock: 9, head: 10, reorgRecovered: false });
   assert.equal(store.observations().length, 1);
 });
 
-test('scanner credits every finalized observation idempotently and records the completed state', async () => {
+test('scanner credits a finalized observation once and does not re-credit it after restart', async () => {
   const adapter = new FixtureAdapter();
   const store = new InMemoryDepositScanStore();
   const credited: Array<{ accountId: string; transactionHash: string }> = [];
@@ -53,24 +54,29 @@ test('scanner credits every finalized observation idempotently and records the c
   });
   const target = { accountId: 'account-1', address: 'T111111111111111111111111111111111', assetCode: 'USDT' };
 
-  await scanner.scan([target], 7);
+  await scanner.scan([target, target], 7);
 
   assert.deepEqual(credited, [{ accountId: 'account-1', transactionHash: 'tx-001' }]);
   assert.equal(store.observations()[0]?.status, 'credited');
 });
 
-test('scanner rolls back a persisted cursor after a reorg and replays only the bounded window', async () => {
+test('scanner fails closed on a deep reorg without changing stored data or crediting again', async () => {
   const adapter = new FixtureAdapter();
   const store = new InMemoryDepositScanStore();
-  const scanner = new DepositScanner(adapter, store, policy, { reorgWindow: 2 });
+  const credited: string[] = [];
+  const scanner = new DepositScanner(adapter, store, policy, { reorgWindow: 2 }, { async credit(observation) { credited.push(observation.transactionHash); } });
   const target = { accountId: 'account-1', address: 'T111111111111111111111111111111111', assetCode: 'USDT' };
   await scanner.scan([target], 7);
+  const cursorBeforeReorg = await store.cursor('tron-shasta');
+  const observationsBeforeReorg = store.observations();
+  const queriesBeforeReorg = adapter.queries.length;
   adapter.reorged = true;
 
-  const result = await scanner.scan([target], 7);
-  assert.deepEqual(result, { candidates: 1, fromBlock: 8, head: 10, reorgRecovered: true });
-  assert.equal(store.observations().length, 1);
-  assert.equal((await store.cursor('tron-shasta'))?.blockHash, 'reorg-10');
+  await assert.rejects(() => scanner.scan([target], 7), /deep_chain_reorg_detected/);
+  assert.deepEqual(await store.cursor('tron-shasta'), cursorBeforeReorg);
+  assert.deepEqual(store.observations(), observationsBeforeReorg);
+  assert.equal(adapter.queries.length, queriesBeforeReorg);
+  assert.deepEqual(credited, ['tx-001']);
 });
 
 test('scanner limits a recovery scan to a bounded block range and resumes at the persisted boundary', async () => {
@@ -84,4 +90,45 @@ test('scanner limits a recovery scan to a bounded block range and resumes at the
 
   assert.deepEqual(adapter.queries[0], { contractIdentifier: 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj', fromBlock: 0, toBlock: 4, watchedAddresses: [target.address] });
   assert.equal((await store.cursor('tron-shasta'))?.height, 4);
+});
+
+test('scanner retries an uncredited observation after a creditor failure without advancing the cursor', async () => {
+  const adapter = new FixtureAdapter();
+  const store = new InMemoryDepositScanStore();
+  let attempts = 0;
+  const scanner = new DepositScanner(adapter, store, policy, { reorgWindow: 2 }, {
+    async credit() {
+      attempts += 1;
+      if (attempts === 1) throw new Error('creditor_temporarily_unavailable');
+    },
+  });
+  const target = { accountId: 'account-1', address: 'T111111111111111111111111111111111', assetCode: 'USDT' };
+
+  await assert.rejects(() => scanner.scan([target], 7), /creditor_temporarily_unavailable/);
+  assert.equal((await store.cursor('tron-shasta')), undefined);
+  assert.equal(store.observations()[0]?.status, 'finalized_candidate');
+
+  await scanner.scan([target], 7);
+  assert.equal(attempts, 2);
+  assert.equal(store.observations()[0]?.status, 'credited');
+  assert.equal((await store.cursor('tron-shasta'))?.height, 8);
+});
+
+test('scanner refuses historical orphaned credits before any network query, credit, or write', async () => {
+  const adapter = new FixtureAdapter();
+  class HistoricalCreditStore extends InMemoryDepositScanStore {
+    public override async assertNoOrphanedCredits(): Promise<void> {
+      throw new Error('orphaned_credited_deposit_detected');
+    }
+  }
+  const store = new HistoricalCreditStore();
+  const credited: string[] = [];
+  const scanner = new DepositScanner(adapter, store, policy, { reorgWindow: 2 }, { async credit(observation) { credited.push(observation.transactionHash); } });
+  const target = { accountId: 'account-1', address: 'T111111111111111111111111111111111', assetCode: 'USDT' };
+
+  await assert.rejects(() => scanner.scan([target], 7), /orphaned_credited_deposit_detected/);
+  assert.deepEqual(adapter.queries, []);
+  assert.deepEqual(credited, []);
+  assert.equal(await store.cursor('tron-shasta'), undefined);
+  assert.deepEqual(store.observations(), []);
 });
