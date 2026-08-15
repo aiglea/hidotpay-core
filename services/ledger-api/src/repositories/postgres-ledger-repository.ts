@@ -5,6 +5,7 @@ import type { Pool, PoolClient } from 'pg';
 import { DomainError } from '../domain/errors.js';
 import { buildInternalTransfer, buildTransaction, type LedgerTransaction } from '../domain/ledger.js';
 import { parseNonNegativeAtoms, parsePositiveAtoms } from '../domain/money.js';
+import { decodeWalletTransactionCursor, encodeWalletTransactionCursor } from '../domain/wallet-transaction-cursor.js';
 import { RiskService } from '../services/risk-service.js';
 import type {
   Account,
@@ -14,6 +15,9 @@ import type {
   IdempotentTransfer,
   LedgerRepository,
   TransferResult,
+  WalletTransaction,
+  WalletTransactionPage,
+  WalletTransactionPageRequest,
   WithdrawalFeeQuote,
   Withdrawal,
   WithdrawalRequest,
@@ -64,6 +68,34 @@ type WithdrawalWhitelistRow = {
   status: 'active' | 'blocked' | 'pending_cooldown';
 };
 
+type WalletTransactionRow = {
+  amount_atoms: string;
+  asset_code: string;
+  created_at: Date;
+  id: string;
+  transaction_type: string;
+};
+
+function toWalletTransactionPage(rows: WalletTransactionRow[], limit: number): WalletTransactionPage {
+  const visibleRows = rows.slice(0, limit);
+  const transactions = visibleRows.map<WalletTransaction>((row) => {
+    const amountAtoms = BigInt(row.amount_atoms);
+    return {
+      amountAtoms: (amountAtoms < 0n ? -amountAtoms : amountAtoms).toString(),
+      assetCode: row.asset_code,
+      createdAt: row.created_at.toISOString(),
+      direction: amountAtoms < 0n ? 'outgoing' : 'incoming',
+      id: row.id,
+      type: row.transaction_type,
+    };
+  });
+  const last = transactions.at(-1);
+  return {
+    ...(rows.length > limit && last ? { nextCursor: encodeWalletTransactionCursor({ createdAt: last.createdAt, id: last.id }) } : {}),
+    transactions,
+  };
+}
+
 function isRetryable(error: unknown): boolean {
   const code = (error as { code?: string }).code;
   return code === '40001' || code === '23505';
@@ -108,6 +140,23 @@ export class PostgresLedgerRepository implements LedgerRepository {
       ownerId: account.owner_id,
       status: account.status,
     };
+  }
+
+  public async listWalletTransactions(accountId: string, page: WalletTransactionPageRequest): Promise<WalletTransactionPage> {
+    if (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 100) throw new DomainError('invalid_wallet_transaction_page');
+    const cursor = page.cursor ? decodeWalletTransactionCursor(page.cursor) : undefined;
+    const rows = await this.pool.query<WalletTransactionRow>(
+      `SELECT transactions.id, transactions.transaction_type, postings.asset_code,
+              postings.amount_atoms::STRING, transactions.created_at
+         FROM ledger_postings AS postings
+         JOIN ledger_transactions AS transactions ON transactions.id = postings.transaction_id
+        WHERE postings.account_id = $1
+          AND ($2::TIMESTAMPTZ IS NULL OR (transactions.created_at, transactions.id) < ($2::TIMESTAMPTZ, $3::UUID))
+        ORDER BY transactions.created_at DESC, transactions.id DESC
+        LIMIT $4`,
+      [accountId, cursor?.createdAt ?? null, cursor?.id ?? null, page.limit + 1],
+    );
+    return toWalletTransactionPage(rows.rows, page.limit);
   }
 
   public async createWithdrawalFeeQuote(input: CreateWithdrawalFeeQuote): Promise<WithdrawalFeeQuote> {

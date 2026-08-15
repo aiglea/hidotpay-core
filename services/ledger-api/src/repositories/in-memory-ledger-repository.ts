@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
 import { DomainError } from '../domain/errors.js';
-import { buildInternalTransfer, buildTransaction } from '../domain/ledger.js';
+import { buildInternalTransfer, buildTransaction, type LedgerTransaction } from '../domain/ledger.js';
 import { parseNonNegativeAtoms, parsePositiveAtoms } from '../domain/money.js';
+import { decodeWalletTransactionCursor, encodeWalletTransactionCursor } from '../domain/wallet-transaction-cursor.js';
 import { RiskService } from '../services/risk-service.js';
 import type {
   Account,
@@ -13,6 +14,9 @@ import type {
   IdempotentTransfer,
   LedgerRepository,
   TransferResult,
+  WalletTransaction,
+  WalletTransactionPage,
+  WalletTransactionPageRequest,
   WithdrawalFeeQuote,
   Withdrawal,
   WithdrawalRequest,
@@ -23,6 +27,15 @@ import type {
 type StoredIdempotency = {
   requestHash: string;
   transferId: string;
+};
+
+type StoredWalletTransaction = {
+  accountId: string;
+  amountAtoms: bigint;
+  assetCode: string;
+  createdAt: string;
+  id: string;
+  type: string;
 };
 
 export class InMemoryLedgerRepository implements LedgerRepository {
@@ -37,6 +50,9 @@ export class InMemoryLedgerRepository implements LedgerRepository {
   private readonly withdrawalFeeQuotes = new Map<string, WithdrawalFeeQuote & { amountAtoms: string; assetCode: string; consumed: boolean; network: string; userId: string }>();
   private readonly withdrawalWhitelists = new Map<string, { addedAt: string; status: 'active' | 'blocked' | 'pending_cooldown' }>();
   private readonly withdrawalRequestedAt = new Map<string, Date>();
+  private readonly walletTransactions: StoredWalletTransaction[] = [];
+
+  public constructor(private readonly options: { clock?: () => Date } = {}) {}
 
   public seedAccount(account: Omit<Account, 'status'> & { status?: Account['status'] }): void {
     this.accounts.set(account.id, { ...account, status: account.status ?? 'active' });
@@ -80,6 +96,16 @@ export class InMemoryLedgerRepository implements LedgerRepository {
     const account = this.accounts.get(accountId);
     if (!account) throw new DomainError('account_not_found');
     return { ...account };
+  }
+
+  public async listWalletTransactions(accountId: string, page: WalletTransactionPageRequest): Promise<WalletTransactionPage> {
+    this.requireWalletTransactionPage(page);
+    const cursor = page.cursor ? decodeWalletTransactionCursor(page.cursor) : undefined;
+    const transactions = this.walletTransactions
+      .filter((transaction) => transaction.accountId === accountId)
+      .filter((transaction) => !cursor || transaction.createdAt < cursor.createdAt || (transaction.createdAt === cursor.createdAt && transaction.id < cursor.id))
+      .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id));
+    return this.toWalletTransactionPage(transactions.slice(0, page.limit + 1), page.limit);
   }
 
   public async createWithdrawalFeeQuote(input: CreateWithdrawalFeeQuote): Promise<WithdrawalFeeQuote> {
@@ -127,6 +153,7 @@ export class InMemoryLedgerRepository implements LedgerRepository {
       { accountId: destination.id, amountAtoms: amountAtoms.toString(), assetCode: input.assetCode },
     ]);
     this.applyTransaction(transaction.postings.map((posting) => ({ accountId: posting.accountId, assetCode: posting.assetCode, amountAtoms: posting.amountAtoms })));
+    this.recordWalletTransaction(transaction);
     const result = { created: true, depositId: randomUUID(), transferId: transaction.id };
     this.deposits.set(receiptKey, result);
     return result;
@@ -185,6 +212,7 @@ export class InMemoryLedgerRepository implements LedgerRepository {
       { accountId: frozen.id, amountAtoms: totalAtoms.toString(), assetCode: input.assetCode },
     ]);
     this.applyTransaction(freeze.postings.map((posting) => ({ accountId: posting.accountId, assetCode: posting.assetCode, amountAtoms: posting.amountAtoms })));
+    this.recordWalletTransaction(freeze);
     const withdrawal: Withdrawal = {
       amountAtoms: amountAtoms.toString(), assetCode: input.assetCode, destinationAddress: input.destinationAddress,
       feeAtoms: feeAtoms.toString(), frozenAccountId: frozen.id, id: randomUUID(), network: input.network,
@@ -221,6 +249,7 @@ export class InMemoryLedgerRepository implements LedgerRepository {
       { accountId: treasury.id, amountAtoms: feeAtoms.toString(), assetCode: withdrawal.assetCode },
     ].filter((posting) => posting.amountAtoms !== '0'));
     this.applyTransaction(transaction.postings.map((posting) => ({ accountId: posting.accountId, assetCode: posting.assetCode, amountAtoms: posting.amountAtoms })));
+    this.recordWalletTransaction(transaction);
     withdrawal.status = 'confirmed';
     return { ...withdrawal };
   }
@@ -250,6 +279,7 @@ export class InMemoryLedgerRepository implements LedgerRepository {
       { accountId: source.id, amountAtoms: totalAtoms.toString(), assetCode: withdrawal.assetCode },
     ]);
     this.applyTransaction(release.postings.map((posting) => ({ accountId: posting.accountId, assetCode: posting.assetCode, amountAtoms: posting.amountAtoms })));
+    this.recordWalletTransaction(release);
     withdrawal.status = 'failed';
     return { ...withdrawal };
   }
@@ -281,6 +311,7 @@ export class InMemoryLedgerRepository implements LedgerRepository {
     const transaction = buildInternalTransfer(input);
     this.balances.set(sourceKey, sourceBalance + (transaction.postings[0]?.amountAtoms ?? 0n));
     this.balances.set(destinationKey, (this.balances.get(destinationKey) ?? 0n) + (transaction.postings[1]?.amountAtoms ?? 0n));
+    this.recordWalletTransaction(transaction);
     this.idempotency.set(idempotencyKey, { requestHash: input.requestHash, transferId: transaction.id });
     return { created: true, transferId: transaction.id };
   }
@@ -295,6 +326,38 @@ export class InMemoryLedgerRepository implements LedgerRepository {
 
   private sameUtcDay(left: Date, right: Date): boolean {
     return left.getUTCFullYear() === right.getUTCFullYear() && left.getUTCMonth() === right.getUTCMonth() && left.getUTCDate() === right.getUTCDate();
+  }
+
+  private recordWalletTransaction(transaction: LedgerTransaction): void {
+    const createdAt = (this.options.clock?.() ?? new Date()).toISOString();
+    this.walletTransactions.push(...transaction.postings.map((posting) => Object.freeze({
+      accountId: posting.accountId,
+      amountAtoms: posting.amountAtoms,
+      assetCode: posting.assetCode,
+      createdAt,
+      id: transaction.id,
+      type: transaction.transactionType,
+    })));
+  }
+
+  private requireWalletTransactionPage(page: WalletTransactionPageRequest): void {
+    if (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 100) throw new DomainError('invalid_wallet_transaction_page');
+  }
+
+  private toWalletTransactionPage(rows: StoredWalletTransaction[], limit: number): WalletTransactionPage {
+    const transactions = rows.slice(0, limit).map<WalletTransaction>((row) => ({
+      amountAtoms: (row.amountAtoms < 0n ? -row.amountAtoms : row.amountAtoms).toString(),
+      assetCode: row.assetCode,
+      createdAt: row.createdAt,
+      direction: row.amountAtoms < 0n ? 'outgoing' : 'incoming',
+      id: row.id,
+      type: row.type,
+    }));
+    const last = transactions.at(-1);
+    return {
+      ...(rows.length > limit && last ? { nextCursor: encodeWalletTransactionCursor({ createdAt: last.createdAt, id: last.id }) } : {}),
+      transactions,
+    };
   }
 
   private applyTransaction(postings: Array<{ accountId: string; assetCode: string; amountAtoms: bigint }>): void {

@@ -105,10 +105,30 @@ export type Withdrawal = {
   status: WithdrawalStatus;
 };
 
+export type WalletTransaction = {
+  amountAtoms: string;
+  assetCode: string;
+  createdAt: string;
+  direction: 'incoming' | 'outgoing';
+  id: string;
+  type: string;
+};
+
+export type WalletTransactionPage = {
+  nextCursor?: string;
+  transactions: WalletTransaction[];
+};
+
+export type WalletTransactionPageRequest = {
+  cursor?: string;
+  limit: number;
+};
+
 export interface LedgerRepository {
   ensureUserWallet(ownerId: string): Promise<UserWallet>;
   getAccount(accountId: string): Promise<Account>;
   getBalances(accountId: string): Promise<Array<{ assetCode: string; balanceAtoms: string }>>;
+  listWalletTransactions(accountId: string, page: WalletTransactionPageRequest): Promise<WalletTransactionPage>;
   createWithdrawalFeeQuote(input: CreateWithdrawalFeeQuote): Promise<WithdrawalFeeQuote>;
   confirmDeposit(input: ConfirmedDeposit): Promise<DepositResult>;
   requestWithdrawal(input: WithdrawalRequest): Promise<WithdrawalResult>;
