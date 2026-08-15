@@ -20,6 +20,8 @@ const testCases = [
   { file: 'tests/integration/transfer-repository.test.ts', name: 'CockroachDB deposit and withdrawal lifecycle preserves a balanced ledger' },
   { file: 'tests/integration/transfer-repository.test.ts', name: 'CockroachDB serializes competing withdrawals so a user balance never becomes negative' },
   { file: 'tests/integration/wallet-addresses.test.ts', name: 'a user receives one persistent independent address per network, even under concurrent allocation' },
+  { file: 'tests/integration/p2p-order-repository.test.ts', name: 'CockroachDB P2P order locks, releases, and balances each order exactly once' },
+  { file: 'tests/integration/p2p-order-repository.test.ts', name: 'CockroachDB timeout refunds only an overdue unpaid P2P order once' },
 ];
 
 for (const testCase of testCases) {
