@@ -1,6 +1,6 @@
 {
   "name": "hidotpay-wallet",
-  "version": "0.2.62",
+  "version": "0.2.65",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {

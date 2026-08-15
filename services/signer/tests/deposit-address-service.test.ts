@@ -33,6 +33,40 @@ test('derives a public deposit address without exposing key material', async () 
   assert.doesNotMatch(JSON.stringify(result), /private|seed|mnemonic/i);
 });
 
+test('accepts wallet network names ethereum and tron with matching address formats', async () => {
+  const ethBackend: DepositAddressBackend = {
+    async deriveDepositAddress() {
+      return '0x1111111111111111111111111111111111111111';
+    },
+  };
+  const tronBackend: DepositAddressBackend = {
+    async deriveDepositAddress() {
+      return 'TQXy7f75pxPnYt5M8Wj5tNGekfFuVyDyQj';
+    },
+  };
+  const ethService = new DepositAddressService({
+    allowedNetworks: ['ethereum', 'tron'],
+    mainnetEnabled: false,
+    trustedCaller: 'wallet-address-service',
+  }, ethBackend);
+  const tronService = new DepositAddressService({
+    allowedNetworks: ['ethereum', 'tron'],
+    mainnetEnabled: false,
+    trustedCaller: 'wallet-address-service',
+  }, tronBackend);
+
+  assert.deepEqual(await ethService.deriveDepositAddress({ ...request, network: 'ethereum' }), {
+    address: '0x1111111111111111111111111111111111111111',
+    keyVersion: 1,
+    network: 'ethereum',
+  });
+  assert.deepEqual(await tronService.deriveDepositAddress({ ...request, network: 'tron' }), {
+    address: 'TQXy7f75pxPnYt5M8Wj5tNGekfFuVyDyQj',
+    keyVersion: 1,
+    network: 'tron',
+  });
+});
+
 test('rejects non-private callers, mainnet, and an address returned for the wrong chain', async () => {
   const backend: DepositAddressBackend = {
     async deriveDepositAddress() {

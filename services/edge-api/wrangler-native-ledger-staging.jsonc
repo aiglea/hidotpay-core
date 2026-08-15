@@ -17,5 +17,11 @@
       "binding": "HYPERDRIVE",
       "id": "cab293cdae3e461cb46ffbefd2b5415c"
     }
+  ],
+  "services": [
+    {
+      "binding": "DEPOSIT_SIGNER",
+      "service": "hidotpay-deposit-signer-staging"
+    }
   ]
 }

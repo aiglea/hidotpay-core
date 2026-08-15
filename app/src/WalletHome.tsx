@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { figmaWallet, figmaWalletShared } from './FigmaWalletTheme';
+import { isInvalidAuthGrant } from './auth-session';
 import { allocateDepositAddress, getWalletSnapshot, getWalletTransactions, submitInternalTransfer, type DepositAddress, type WalletSnapshot, type WalletTransaction } from './wallet-api';
 
 type WalletHomeProps = { apiBaseUrl: string; getAccessToken: () => Promise<string | undefined>; onSignOut: () => void; username?: string };
@@ -47,20 +48,24 @@ export function WalletHome({ apiBaseUrl, getAccessToken, onSignOut, username }: 
   const [transferBusy, setTransferBusy] = useState(false);
   const configured = Boolean(apiBaseUrl.trim());
   const fetchToken = useCallback(async () => { const token = await getAccessToken(); if (!token) throw new Error('登入憑證尚未就緒，請重新登入後再試。'); return token; }, [getAccessToken]);
+  const failAuth = useCallback((reason: unknown, fallback: string) => {
+    if (isInvalidAuthGrant(reason)) { onSignOut(); return '登入已過期，請重新登入。'; }
+    return messageFrom(reason, fallback);
+  }, [onSignOut]);
   const refresh = useCallback(async () => {
     if (!configured) { setStatus('idle'); return; }
     setMessage(undefined); setStatus('loading');
     try { setWallet(await getWalletSnapshot({ accessToken: await fetchToken(), apiBaseUrl })); setStatus('ready'); }
-    catch (reason) { setWallet(undefined); setMessage(messageFrom(reason, '未能讀取錢包資料，請稍後再試。')); setStatus('error'); }
-  }, [apiBaseUrl, configured, fetchToken]);
+    catch (reason) { setWallet(undefined); setMessage(failAuth(reason, '未能讀取錢包資料，請稍後再試。')); setStatus('error'); }
+  }, [apiBaseUrl, configured, failAuth, fetchToken]);
   const loadHistory = useCallback(async (cursor?: string) => {
     if (!configured) { setHistory(undefined); setHistoryStatus('idle'); return; }
     setHistoryMessage(undefined); setHistoryStatus('loading');
     try {
       const page = await getWalletTransactions({ accessToken: await fetchToken(), apiBaseUrl, cursor });
       setHistory((current) => cursor && current ? { ...page, transactions: [...current.transactions, ...page.transactions] } : page); setHistoryStatus('ready');
-    } catch (reason) { if (!cursor) setHistory(undefined); setHistoryMessage(messageFrom(reason, '未能讀取交易紀錄，請稍後再試。')); setHistoryStatus('error'); }
-  }, [apiBaseUrl, configured, fetchToken]);
+    } catch (reason) { if (!cursor) setHistory(undefined); setHistoryMessage(failAuth(reason, '未能讀取交易紀錄，請稍後再試。')); setHistoryStatus('error'); }
+  }, [apiBaseUrl, configured, failAuth, fetchToken]);
   useEffect(() => { void refresh(); void loadHistory(); }, [loadHistory, refresh]);
   const usdt = useMemo(() => wallet?.balances.find((balance) => balance.assetCode === 'USDT'), [wallet]);
   const requestDepositAddress = async () => {

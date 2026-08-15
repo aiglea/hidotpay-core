@@ -50,6 +50,8 @@ npx --no-install wrangler secret put WITHDRAWAL_FEE_SCHEDULE
 
 不得放入私鑰、助記詞、seed、主網簽名 API 或任何可直接簽出資產的憑證。Cloudflare Secret 僅能用於資料庫與服務間連線；真正簽名保留在外部隔離 signer/HSM。
 
+充值地址簽名器是獨立 Worker `hidotpay-deposit-signer-staging`。它只接受 account xpub 與服務權杖，路徑為 `/v1/deposit-addresses`。原生帳本 Worker 必須以 `DEPOSIT_SIGNER` service binding 呼叫它，不得走公網。`SIGNER_DERIVATION_URL` 僅作本機／無 binding 後備，值必須是該完整 HTTPS 路徑。助記詞只存在操作者鑰匙圈 `hidotpay-deposit-master-seed`，不得寫入 Worker、Git 或本文件。簽名器失敗必須以 `signer_unavailable`／`signer_rejected` 回傳，不可再變成含糊的 503。
+
 ## 5. 部署與可觀察驗收
 
 ```bash

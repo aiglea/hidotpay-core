@@ -293,6 +293,15 @@ test('an unavailable Logto issuer is reported as a retryable service outage', as
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { code: 'authentication_unavailable', message: '請求無法處理' });
 
+  const signerUnavailable = nativeErrorResponse(new DomainError('signer_unavailable'));
+  assert.ok(signerUnavailable);
+  assert.equal(signerUnavailable.status, 503);
+  assert.deepEqual(await signerUnavailable.json(), { code: 'signer_unavailable', message: '請求無法處理' });
+  const signerRejected = nativeErrorResponse(new DomainError('signer_rejected'));
+  assert.ok(signerRejected);
+  assert.equal(signerRejected.status, 503);
+  assert.deepEqual(await signerRejected.json(), { code: 'signer_rejected', message: '請求無法處理' });
+
   const fastifyErrors = readFileSync(new URL('../../ledger-api/src/http/errors.ts', import.meta.url), 'utf8');
   assert.match(fastifyErrors, /authentication_unavailable:\s*503/);
 });
@@ -625,4 +634,25 @@ test('my wallet address derives the account from the authenticated actor and exp
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { address: 'TQ3x8uA1zC2kN6mP9rS4vW7yZ', key_version: 3, network: 'tron' });
   assert.deepEqual(allocations, [{ accountId: '11111111-1111-4111-8111-111111111111', network: 'tron', ownerId: 'actor-001' }]);
+});
+
+test('native ledger prefers the isolated signer service binding over public HTTPS', async () => {
+  const calls = [];
+  const deriver = nativeRuntime.signerAddressDeriverFromEnv({
+    DEPOSIT_SIGNER: {
+      fetch: async (url, init) => {
+        calls.push({ url: String(url), authorization: new Headers(init?.headers).get('authorization') });
+        return Response.json({ address: '0x1111111111111111111111111111111111111111' });
+      },
+    },
+    SIGNER_DERIVATION_URL: 'https://signer.public.example/v1/deposit-addresses',
+    SIGNER_SERVICE_TOKEN: 'test-signer-service-token',
+  });
+  assert.equal(await deriver.deriveDepositAddress({ derivationIndex: 0, keyVersion: 1, network: 'ethereum' }), '0x1111111111111111111111111111111111111111');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.authorization, 'Bearer test-signer-service-token');
+  assert.throws(
+    () => nativeRuntime.signerAddressDeriverFromEnv({ SIGNER_SERVICE_TOKEN: undefined }),
+    (error) => error instanceof DomainError && error.code === 'signer_unavailable',
+  );
 });

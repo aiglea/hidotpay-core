@@ -7,6 +7,7 @@ export interface Env extends NativeLedgerAuthEnv, NativeLedgerWorkerEnv {
   HYPERDRIVE: Hyperdrive;
   OPENBAO_TRANSIT_TOKEN?: string;
   OPENBAO_TRANSIT_URL?: string;
+  DEPOSIT_SIGNER?: { fetch: typeof fetch };
   SIGNER_DERIVATION_URL?: string;
   SIGNER_SERVICE_TOKEN?: string;
   WITHDRAWAL_FEE_SCHEDULE?: string;

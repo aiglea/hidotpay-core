@@ -36,7 +36,7 @@ sh deployment/terraform/smoke-test.sh
 
 ### 1. 身分與公開 API
 
-- Logto 必須建立 API Resource `https://api-dev.hidotpay.com`，並建立一般使用者、財務覆核員、鏈上工作程式的最小權限角色。
+- Logto 必須建立 API Resource `https://api-dev.hidotpay.com`，並建立一般使用者、財務覆核員、鏈上工作程式的最小權限角色。Staging SPA 已指向此 Resource；四種真實角色的允許／拒絕紀錄仍待保存。
 - 以三個獨立身分測試：錯誤 audience、過期 token、偽造角色與越權提款都被拒絕。
 - 以買方、賣方與仲裁員三個獨立身分測試：不得自買自賣、買方不能放幣、賣方不能在付款後取消、非仲裁員不能裁決；同一個 P2P 請求重送只能移動資產一次。
 - 在隔離資料庫實測一筆逾時未付款訂單：排程只能退款一次；已標記付款、已開爭議、未到期的訂單都不得退款。確認 `p2p-payment-expiry` 的失敗告警、重試與執行紀錄可追查。

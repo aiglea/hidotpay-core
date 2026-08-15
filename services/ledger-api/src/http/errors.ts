@@ -40,6 +40,10 @@ const statusByCode: Record<string, number> = {
   unauthenticated: 401,
   withdrawal_not_found: 404,
   withdrawals_disabled: 403,
+  signer_unavailable: 503,
+  signer_rejected: 503,
+  signer_key_not_configured: 503,
+  signer_returned_invalid_address: 502,
 };
 
 export function sendError(reply: FastifyReply, error: unknown): void {

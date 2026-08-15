@@ -26,9 +26,10 @@ export type DepositAddressAuditRecord = {
 };
 
 /**
- * This backend must be implemented by an HSM/Web3Signer-backed process.
- * It receives only a key reference and returns public address text; this
- * service deliberately has no private-key, seed, or mnemonic input.
+ * Address derivation may use an account-level xpub. Withdrawal signing still
+ * requires an HSM/Web3Signer-backed process. This interface only receives a
+ * key reference and returns public address text; it has no private-key,
+ * seed, or mnemonic input.
  */
 export interface DepositAddressBackend {
   deriveDepositAddress(input: Pick<DepositAddressRequest, 'derivationIndex' | 'keyVersion' | 'network'>): Promise<string>;
@@ -93,8 +94,8 @@ export class DepositAddressService {
   }
 
   private matchesNetworkAddress(network: string, address: string): boolean {
-    if (network.startsWith('ethereum-')) return /^0x[0-9a-f]{40}$/i.test(address);
-    if (network.startsWith('tron-')) return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
+    if (network === 'ethereum' || network.startsWith('ethereum-')) return /^0x[0-9a-f]{40}$/i.test(address);
+    if (network === 'tron' || network.startsWith('tron-')) return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
     return false;
   }
 }

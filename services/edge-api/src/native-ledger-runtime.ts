@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 
 import type { Actor } from '../../ledger-api/src/http/auth.js';
+import { DomainError } from '../../ledger-api/src/domain/errors.js';
 import { isValidIdempotencyKey, requestHash } from '../../ledger-api/src/domain/idempotency.js';
 import type { P2POrderAction } from '../../ledger-api/src/domain/p2p.js';
 import { decodeWalletTransactionCursor } from '../../ledger-api/src/domain/wallet-transaction-cursor.js';
@@ -17,6 +18,7 @@ import { TransferService } from '../../ledger-api/src/services/transfer-service.
 import type { NativeLedgerRuntime } from './native-ledger-worker.js';
 
 export type NativeLedgerRuntimeEnv = {
+  DEPOSIT_SIGNER?: { fetch: typeof fetch };
   HYPERDRIVE: Hyperdrive;
   OPENBAO_TRANSIT_TOKEN?: string;
   OPENBAO_TRANSIT_URL?: string;
@@ -504,6 +506,17 @@ export function createWalletAddressRouter(
   };
 }
 
+export function signerAddressDeriverFromEnv(env: Pick<NativeLedgerRuntimeEnv, 'DEPOSIT_SIGNER' | 'SIGNER_DERIVATION_URL' | 'SIGNER_SERVICE_TOKEN'>): RemoteSignerAddressDeriver {
+  if (!env.SIGNER_SERVICE_TOKEN) throw new DomainError('signer_unavailable');
+  const fetchImpl = env.DEPOSIT_SIGNER ? env.DEPOSIT_SIGNER.fetch.bind(env.DEPOSIT_SIGNER) : undefined;
+  if (!fetchImpl && !env.SIGNER_DERIVATION_URL) throw new DomainError('signer_unavailable');
+  return new RemoteSignerAddressDeriver({
+    fetchImpl,
+    serviceToken: env.SIGNER_SERVICE_TOKEN,
+    url: env.SIGNER_DERIVATION_URL ?? 'https://deposit-signer.internal/v1/deposit-addresses',
+  });
+}
+
 export function createNativeLedgerRuntime(env: NativeLedgerRuntimeEnv): NativeLedgerRuntime<Actor> {
   if (!env.HYPERDRIVE.connectionString) throw new Error('Hyperdrive connection is unavailable');
 
@@ -536,10 +549,9 @@ export function createNativeLedgerRuntime(env: NativeLedgerRuntimeEnv): NativeLe
           )).handle(request, actor);
         }
         if (pathname === '/v1/me/wallet-addresses' || pathname === '/v1/wallet-addresses') {
-          if (!env.SIGNER_DERIVATION_URL || !env.SIGNER_SERVICE_TOKEN) throw new Error('Private signer configuration is unavailable');
           return await createWalletAddressRouter(repository, new PostgresWalletAddressRepository(
             pool,
-            new RemoteSignerAddressDeriver({ serviceToken: env.SIGNER_SERVICE_TOKEN, url: env.SIGNER_DERIVATION_URL }),
+            signerAddressDeriverFromEnv(env),
           )).handle(request, actor);
         }
         return await createReadOnlyWalletRouter(repository).handle(request, actor);

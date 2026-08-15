@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { DomainError } from '../../src/domain/errors.js';
 import { RemoteSignerAddressDeriver } from '../../src/integrations/signer-address-deriver.js';
 
 test('ledger API requests a public deposit address through the private signer without sending key material', async () => {
@@ -39,6 +40,24 @@ test('ledger API refuses malformed or unsuccessful private signer responses', as
     url: 'https://signer.internal.example/v1/deposit-addresses',
   });
 
-  await assert.rejects(() => badResponse.deriveDepositAddress({ derivationIndex: 0, keyVersion: 1, network: 'tron-shasta' }), /signer response is invalid/);
-  await assert.rejects(() => unavailable.deriveDepositAddress({ derivationIndex: 0, keyVersion: 1, network: 'tron-shasta' }), /private signer returned HTTP 503/);
+  await assert.rejects(
+    () => badResponse.deriveDepositAddress({ derivationIndex: 0, keyVersion: 1, network: 'tron-shasta' }),
+    (error: unknown) => error instanceof DomainError && error.code === 'signer_rejected',
+  );
+  await assert.rejects(
+    () => unavailable.deriveDepositAddress({ derivationIndex: 0, keyVersion: 1, network: 'tron-shasta' }),
+    (error: unknown) => error instanceof DomainError && error.code === 'signer_rejected',
+  );
+});
+
+test('ledger API reports a transport failure as signer_unavailable without leaking internals', async () => {
+  const deriver = new RemoteSignerAddressDeriver({
+    fetchImpl: async () => { throw new Error('connect ECONNREFUSED'); },
+    serviceToken: 'test-signer-service-token',
+    url: 'https://signer.internal.example/v1/deposit-addresses',
+  });
+  await assert.rejects(
+    () => deriver.deriveDepositAddress({ derivationIndex: 0, keyVersion: 1, network: 'ethereum' }),
+    (error: unknown) => error instanceof DomainError && error.code === 'signer_unavailable' && !/ECONNREFUSED|stack|private/i.test(String(error)),
+  );
 });

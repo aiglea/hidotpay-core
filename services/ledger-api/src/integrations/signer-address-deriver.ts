@@ -1,4 +1,5 @@
 import type { AddressDeriver } from '../repositories/postgres-wallet-address-repository.js';
+import { DomainError } from '../domain/errors.js';
 
 type FetchImplementation = typeof fetch;
 
@@ -18,18 +19,18 @@ export class RemoteSignerAddressDeriver implements AddressDeriver {
     try {
       parsed = new URL(config.url);
     } catch {
-      throw new Error('private signer URL is invalid');
+      throw new DomainError('signer_unavailable');
     }
-    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.hash) throw new Error('private signer URL must use https without credentials or fragments');
-    if (config.serviceToken.length < 16) throw new Error('private signer service credential is invalid');
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.hash) throw new DomainError('signer_unavailable');
+    if (config.serviceToken.length < 16) throw new DomainError('signer_unavailable');
     this.url = parsed.toString();
   }
 
   public async deriveDepositAddress(input: { derivationIndex: number; keyVersion: number; network: string }): Promise<string> {
     if (!Number.isSafeInteger(input.derivationIndex) || input.derivationIndex < 0 || !Number.isSafeInteger(input.keyVersion) || input.keyVersion < 1) {
-      throw new Error('signer address request is invalid');
+      throw new DomainError('signer_rejected');
     }
-    if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(input.network)) throw new Error('signer address network is invalid');
+    if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(input.network)) throw new DomainError('invalid_network');
     let response: Response;
     try {
       response = await (this.config.fetchImpl ?? fetch)(this.url, {
@@ -42,17 +43,17 @@ export class RemoteSignerAddressDeriver implements AddressDeriver {
         signal: AbortSignal.timeout(5_000),
       });
     } catch {
-      throw new Error('private signer is unavailable');
+      throw new DomainError('signer_unavailable');
     }
-    if (!response.ok) throw new Error(`private signer returned HTTP ${response.status}`);
+    if (!response.ok) throw new DomainError('signer_rejected');
     let payload: unknown;
     try {
       payload = await response.json();
     } catch {
-      throw new Error('signer response is invalid');
+      throw new DomainError('signer_rejected');
     }
     if (!payload || typeof payload !== 'object' || Array.isArray(payload) || typeof (payload as { address?: unknown }).address !== 'string') {
-      throw new Error('signer response is invalid');
+      throw new DomainError('signer_rejected');
     }
     return (payload as { address: string }).address;
   }

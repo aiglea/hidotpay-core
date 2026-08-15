@@ -1,9 +1,9 @@
 # 第一階段完成度與正式上線缺口
 
-更新日期：2026-08-15
-適用版本：0.2.56 起
+更新日期：2026-08-16
+適用版本：0.2.65
 
-這份表把「程式已完成並驗證」和「外部環境已正式驗收」分開。任何標示為外部驗收未完成的項目，都表示不能開啟真實資產充值或提現。
+這份表把「程式已完成並驗證」和「外部環境已正式驗收」分開。任何標示為外部驗收未完成的項目，都表示不能開啟真實資產充值或提現。沒有第二人、沒有付費的 HSM／多區叢集，就不能宣稱「已可保管真實資產」。
 
 ## 已完成並有程式／資料庫驗證的項目
 
@@ -12,6 +12,7 @@
 | 帳戶登入與公開 API 身分邊界 | Logto token 必須符合簽發者與 API 對象；未登入請求不會建立錢包或連資料庫 | `services/ledger-api/tests/http/auth.test.ts`、`services/edge-api/tests/native-ledger-worker.test.mjs` |
 | 不可變帳本 | 站內轉帳、充值、提現凍結與 P2P 託管均以平衡分錄保存；一般帳戶不可為負 | `services/ledger-api/tests/integration/transfer-repository.test.ts` |
 | 獨立充值地址 | 同一使用者同一鏈得到穩定地址；不同使用者不共用；併發不會重複配置 | `services/ledger-api/tests/integration/wallet-addresses.test.ts` |
+| 隔離充值簽名器 | 帳本只向簽名器索取公開地址；簽名器只持有 Ethereum／TRON account xpub；失敗回傳 `signer_unavailable`／`signer_rejected`，不含秘密 | `services/signer/tests/deposit-signer-worker.test.ts`、`services/ledger-api/tests/integrations/signer-address-deriver.test.ts`、`app/tests/wallet-api.test.mjs` |
 | 多鏈充值觀測 | EVM 與 TRON 只處理已啟用官方資產，並依確認門檻、游標、重組視窗與事件去重入帳；掃描器只前進到安全水位，深度重組及歷史 `orphaned + receipt` 一律失敗關閉 | `services/deposit-worker/tests/*.test.ts`、`docs/operations/deposit-reorg-response.md` |
 | 站內免費轉帳 | 已驗證只能扣自己的可用餘額、可重送不重扣、不會產生鏈上簽名或 gas | `services/ledger-api/tests/http/internal-transfers.test.ts` |
 | 提現保護規則 | 預設拒絕提現；手續費報價、白名單冷卻、日限額、單筆限額與凍結規則已受測試覆蓋 | `services/ledger-api/tests/services/risk-service.test.ts`、`services/withdrawal-worker/tests/withdrawal-execution.test.ts` |
@@ -24,9 +25,11 @@
 
 | 項目 | 現況 | 為何尚不能當成正式資金環境 |
 | --- | --- | --- |
-| Cloudflare Worker | `hidotpay-native-ledger-staging` 已部署，健康檢查正常，未登入請求會被拒絕 | `LEDGER_API_ENABLED=false`、`WITHDRAWALS_ENABLED=false`；它只驗證邊緣入口，不會持有或簽名私鑰 |
-| CockroachDB Cloud | 已有隔離測試資料庫並完成真實整合測試 | 尚未取得多區域正式集群、獨立最小權限帳號、備份與還原演練證據 |
-| NocoBase | 本機 Compose、可重跑投影集合、受限投影服務角色與財務檢視者角色均已實測 | 尚未在私有正式網路完成 HTTPS、VPN／身分閘道、雲端密鑰服務、備份還原與實際管理者驗收 |
+| 錢包 UI | `hidotpay-wallet-ui` 已部署；登入走 Logto；失效 refresh token 會清掉本機登入，不會刷 console | 真實登入後的餘額／地址／轉帳仍需操作者用自己的 Logto 帳號走完；P2P 前台未接 |
+| 原生帳本 Worker | `hidotpay-native-ledger-staging`：`/healthz` 200、未登入 401、`LEDGER_API_ENABLED=true`、`WITHDRAWALS_ENABLED=false` | 這是 staging 候選，不是主網資金入口；沒有 `/v1/deposits/confirmed` |
+| 充值簽名器 | `hidotpay-deposit-signer-staging` 只回公開地址；帳本以 `DEPOSIT_SIGNER` service binding 呼叫，不走公網 | 持有的是 account xpub，不是 HSM。主種子只在操作者鑰匙圈。不能保管真實資產 |
+| CockroachDB Cloud | 已有隔離測試／staging 資料庫；本機投影工作者可讀 `admin_*` 檢視 | 尚未取得多區域正式集群、備份與還原演練證據 |
+| NocoBase | 本機 `http://127.0.0.1:13000` Compose 健康；管理者可登入；六個投影集合與財務唯讀角色可重跑；投影一次成功 | 私有開發後台。尚未 VPN／HTTPS 正式網路、雲端密鑰服務、備份還原與第二人驗收 |
 | Blnk | 本機私有部署與受限服務金鑰流程已準備 | 尚未有多副本、私有網路、備份還原與 CockroachDB 實際抽樣對帳證據 |
 
 ## 正式上線仍缺少的外部驗收
@@ -35,30 +38,39 @@
 
 ### 已修正程式 P0，但仍是發布關卡
 
-**充值鏈重組安全**：安全水位、深度重組失敗關閉與歷史 `orphaned + receipt` 防護已完成程式修正；正常流程不會自動扣減使用者、寫入反向 posting 或改寫不可變總帳。惟**專用 `hidotpay_test` 真實資料庫驗證仍是發布關卡**；在該證據、雙人事故恢復演練及後述外部 P0 門檻完成前，不得發布此分支候選版、恢復受影響網路掃描或啟用任何真實充值。事故處置依 `docs/operations/deposit-reorg-response.md` 執行。
+**充值鏈重組安全**：安全水位、深度重組失敗關閉與歷史 `orphaned + receipt` 防護已完成程式修正；正常流程不會自動扣減使用者、寫入反向 posting 或改寫不可變總帳。惟**專用 `hidotpay_test` 真實資料庫驗證仍是發布關卡**；在該證據、雙人事故恢復演練及後述外部 P0 門檻完成前，不得發布此分支為主網候選、恢復受影響網路掃描或啟用任何真實充值。事故處置依 `docs/operations/deposit-reorg-response.md` 執行。
 
-### P0：必須先完成
+### P0：必須先完成（會被外部帳號／費用擋住）
 
-1. **正式簽名器與金鑰隔離**：部署至少三節點 OpenBao、TLS、Raft、高可用解封與不可修改稽核紀錄；EVM 使用經驗收的 HSM／Web3Signer，TRON 使用相同等級的隔離 secp256k1 簽名方案。完成測試網地址、簽名、廣播、確認、失敗、重送與輪替演練，並取得獨立安全審計簽核。
-2. **正式資料保護**：建立 CockroachDB 多可用區正式集群、應用程式／NocoBase 分離帳號、加密備份、還原演練與告警。Blnk 亦需私有網路、最小權限金鑰與可還原多副本。
-3. **真實 Logto 權限驗收**：用一般使用者、鏈上工作程式、財務覆核員、仲裁員四種真實 token 實測允許與拒絕情況，並保存結果。
-4. **雙人變更制度**：兩個不同職責的人完成簽名、風控、白名單、限額、測試網週期與回滾證據覆核後，才可評估開啟帳本 API；提現開關仍需另一份獨立核准。
+1. **測試網充值掃描入帳**：為 EVM／TRON 測試網提供公開或私有 RPC；把 `deposit-worker` 接到原生帳本尚不存在的 `/v1/deposits/confirmed`（或同等受保護入帳路徑）。沒有 RPC 就不能誠實說「鏈上入帳已通」。
+2. **正式簽名器與金鑰隔離**：Turnkey 或同等 HSM／Web3Signer 需操作者註冊並付費。在那之前 `WITHDRAWALS_ENABLED=false`。xpub 充值簽名器不是提領簽名器。
+3. **正式資料保護**：CockroachDB 多可用區正式集群、加密備份、還原演練與告警。Blnk 亦需私有網路與可還原多副本。
+4. **真實 Logto 權限驗收**：用一般使用者、鏈上工作程式、財務覆核員、仲裁員四種真實 token 實測允許與拒絕，並保存結果。
+5. **雙人變更制度**：兩個不同職責的人完成簽名、風控、白名單、限額、測試網週期與回滾證據覆核後，才可評估開啟主網資金開關。
 
 ### P1：與 P0 並行完成
 
-1. **事件與工作流高可用**：Redpanda 三 broker 跨可用區、TLS/SASL/ACL、複寫因子 3；Temporal Cloud 或官方 HA 部署，並實測 broker／worker 故障下的重送與人工復原。
-2. **管理後台正式化**：在私有網路啟動 NocoBase，注入受限投影服務的 CockroachDB 唯讀帳號、CA 與 API 金鑰，完成 HTTPS、備份還原與財務管理者實測；不得改用 NocoBase 直接連線或寫入帳本。
-3. **監控與事故演練**：為帳本不平衡、對帳差異、未確認提現、重複交易雜湊、outbox 堆積、工作流失敗、備份失敗與簽名拒絕建立告警；至少完成一次可用區故障及一次完整還原演練。
+1. **P2P 前台**：後端狀態機已在；錢包主流程這一輪刻意不上 P2P UI。
+2. **事件與工作流高可用**：Redpanda 三 broker 跨可用區；Temporal HA；實測故障重送。
+3. **管理後台正式化**：把已驗證的本機 NocoBase 投影放到私有 HTTPS／VPN；不得讓 NocoBase 直連或寫入帳本。
+4. **監控與事故演練**：帳本不平衡、對帳差異、未確認提現、重複交易雜湊、outbox 堆積、工作流失敗、備份失敗與簽名拒絕的告警；至少一次可用區故障及一次完整還原演練。
 
 ### P2：使用者產品完成度
 
-1. **錢包 App**：登入後已具備餘額、獨立充值地址、站內轉帳與只讀交易紀錄的受保護介面；未設定 API 時明確顯示保護狀態，不產生假資料。P2P 介面及實際已授權 API 端到端驗收仍未完成。
-2. **Figma 對照實作**：目前 Figma 連線尚未提供指定節點的設計內容；在可讀取節點後，才可進行逐項視覺比對與驗收，不應以猜測畫面取代原設計。
-3. **真實操作驗收**：以真實登入帳戶完成「查看餘額 → 取得測試網充值地址 → 確認入帳 → 站內轉帳 → P2P 託管 → 超時退款」的端對端演練；所有資產均限測試環境。
+1. **錢包 App**：登入後具備餘額、獨立充值地址、站內轉帳與只讀交易紀錄的受保護介面；未設定 API 時不產生假資料。P2P 介面仍未完成。
+2. **Figma 對照實作**：指定節點仍無法讀取前，不宣稱像素級還原。
+3. **真實操作驗收**：以真實登入帳戶完成「查看餘額 → 取得測試網充值地址 → 確認入帳 → 站內轉帳 → P2P 託管 → 超時退款」。所有資產均限測試環境。
 
-## 下一個可交付任務
+## 下一次迭代與報報條件
 
-下一個可交付項目是 **正式 Logto API Resource、HTTPS／CORS allowlist 驗收與真實登入的測試網錢包演練**；這些外部環境證據完成後，才能驗收餘額、地址、交易紀錄與站內轉帳的端到端流程。之後再完成 P2P 使用者介面；兩者都不會碰觸私鑰或開啟主網提現。
+| 下一輪工作 | 我可以先做的 | 會被你擋住、不能假裝完成的 |
+| --- | --- | --- |
+| 測試網入帳 | 原生帳本補受保護的入帳路徑、掃描器接 staging、失敗關閉測試 | 你提供／付費的測試網 RPC（或允許使用公開測試網端點的書面決定） |
+| P2P UI | 依現有狀態機做錢包前台，不上主網 | 無；可在下一輪直接做 |
+| Turnkey／HSM 提領 | 維持 `WITHDRAWALS_ENABLED=false`；接好失敗關閉介面 | 你註冊並付費 Turnkey／HSM，並指定第二覆核人 |
+| 多區資料庫 | 寫遷移與權限；不把單區 staging 標成正式 | 你建立並付費 Cockroach 多可用區叢集，完成備份還原演練 |
+
+主網開關在上述證據齊全前保持關閉。
 
 ## 發布前最小證據清單
 

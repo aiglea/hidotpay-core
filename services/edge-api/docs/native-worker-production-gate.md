@@ -13,7 +13,9 @@
 
 - 錢包、餘額、內部轉帳與手續費報價
 - P2P 廣告、訂單、託管狀態動作、仲裁與收款方式
-- 多鏈充值公開地址與鏈上充值確認
+- Ethereum／TRON 充值公開地址（經 `DEPOSIT_SIGNER` service binding）
+
+原生 Worker **沒有** `/v1/deposits/confirmed`。測試網掃描入帳仍由獨立 `deposit-worker` 負責，且尚未接到此 staging 入口。
 
 所有 `/v1/` 請求都先驗證 Logto bearer token；未驗證請求不得建立資料庫連線、錢包、地址、報價、轉帳或 P2P 訂單。提款功能在 Worker 中不提供開啟路徑。
 
@@ -22,7 +24,8 @@
 以下值只能以 Cloudflare Secret 提供，禁止寫入 `wrangler*.jsonc`、Git、NocoBase、日誌或回應：
 
 - `OPENBAO_TRANSIT_URL`、`OPENBAO_TRANSIT_TOKEN`：加密 P2P 收款資料；缺少時路由必須失敗。
-- `SIGNER_DERIVATION_URL`、`SIGNER_SERVICE_TOKEN`：向隔離簽名服務請求公開充值地址；缺少時路由必須失敗。
+- `SIGNER_SERVICE_TOKEN`：帳本呼叫隔離簽名服務時使用的服務權杖；缺少時充值地址路由必須失敗關閉，並回傳 `signer_unavailable`。
+- `SIGNER_DERIVATION_URL`：僅在沒有 `DEPOSIT_SIGNER` service binding 時作為後備 HTTPS 路徑；正式 staging 必須用 Worker 對 Worker binding，不得依賴公網呼叫簽名器。
 
 私鑰、助記詞、seed 與任意簽名 API 一律不得放入 Worker。
 

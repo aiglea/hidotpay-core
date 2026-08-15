@@ -142,6 +142,29 @@ test('錢包 API 不會把登入者權杖送到不安全的 HTTP 網址', async 
   assert.equal(called, false);
 });
 
+test('充值地址失敗時顯示後端錯誤代碼對應的說明，不洩漏內部細節', async () => {
+  const { allocateDepositAddress } = await import('../src/wallet-api.ts');
+
+  await assert.rejects(
+    () => allocateDepositAddress({
+      accessToken: 'signed-in-token',
+      apiBaseUrl: 'https://ledger.example.test',
+      fetchImpl: async () => Response.json({ code: 'signer_unavailable', message: '請求無法處理' }, { status: 503 }),
+      network: 'ethereum',
+    }),
+    /充值地址服務尚未連上/,
+  );
+  await assert.rejects(
+    () => allocateDepositAddress({
+      accessToken: 'signed-in-token',
+      apiBaseUrl: 'https://ledger.example.test',
+      fetchImpl: async () => Response.json({ code: 'invalid_network', message: '請求無法處理' }, { status: 400 }),
+      network: 'bitcoin',
+    }),
+    /不支援這個充值網路/,
+  );
+});
+
 test('站內轉帳使用冪等鍵且不把收款方放進網址', async () => {
   const { submitInternalTransfer } = await import('../src/wallet-api.ts');
   const requests = [];

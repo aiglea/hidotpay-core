@@ -35,6 +35,10 @@ const statusByCode: Record<string, number> = {
   withdrawal_whitelist_cooling_down: 409,
   withdrawal_whitelist_missing: 403,
   withdrawals_disabled: 403,
+  signer_unavailable: 503,
+  signer_rejected: 503,
+  signer_key_not_configured: 503,
+  signer_returned_invalid_address: 502,
 };
 
 export function nativeErrorResponse(error: unknown): Response | undefined {

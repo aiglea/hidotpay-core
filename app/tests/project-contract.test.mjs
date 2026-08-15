@@ -32,6 +32,21 @@ test('web logout uses a dedicated post-sign-out redirect URI', () => {
   assert.match(read('app/index.web.tsx'), /signOut\(webPostLogoutRedirectUri\)/);
 });
 
+test('失效的 Logto refresh token 會清掉本機登入，不會重試授權迴圈', () => {
+  const web = read('app/index.web.tsx');
+  const native = read('app/index.native.tsx');
+  const home = read('src/WalletHome.tsx');
+  assert.match(web, /createLedgerTokenReader/);
+  assert.match(web, /isInvalidAuthGrant/);
+  assert.match(web, /clearAllTokens/);
+  assert.match(web, /useMemo/);
+  assert.match(native, /createLedgerTokenReader/);
+  assert.match(native, /requestLedgerToken/);
+  assert.match(home, /isInvalidAuthGrant/);
+  assert.doesNotMatch(web, /getAccessToken=\{\(\) => \{/);
+  assert.doesNotMatch(native, /getAccessToken=\{\(\) => \{/);
+});
+
 test('已登入使用者會進入錢包首頁，而非停留在登入測試殼', () => {
   assert.match(read('app/index.web.tsx'), /<WalletHome/);
   assert.match(read('app/index.native.tsx'), /<WalletHome/);

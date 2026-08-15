@@ -4,17 +4,19 @@ NocoBase 是財務人員的檢視面板，不是帳本、簽名器或公開 API�
 
 ## 本機啟動
 
-1. 複製 `.env.example` 成本機私有環境變數檔，將兩個值換成不同的長隨機字串。不要把這個檔案提交到 Git。
+1. 密鑰只放本機鑰匙圈，不要寫進 Git。開發機使用：
+   - `hidotpay-nocobase-development-app-key` → `HIDOTPAY_NOCOBASE_APP_KEY`
+   - `hidotpay-nocobase-development-db-password` → `HIDOTPAY_NOCOBASE_DB_PASSWORD`
+   - 管理者密碼：`hidotpay-nocobase-development-admin-password`
 2. 執行：
 
    ```sh
-   set -a
-   . deployment/nocobase/.env
-   set +a
+   export HIDOTPAY_NOCOBASE_APP_KEY="$(security find-generic-password -w -s hidotpay-nocobase-development-app-key)"
+   export HIDOTPAY_NOCOBASE_DB_PASSWORD="$(security find-generic-password -w -s hidotpay-nocobase-development-db-password)"
    docker compose -f deployment/nocobase/docker-compose.development.yaml up -d
    ```
 
-3. 在瀏覽器開啟 `http://127.0.0.1:13000`，第一次依畫面建立管理者帳號；密碼只能保存在本機系統鑰匙圈或正式密鑰服務。
+3. 在瀏覽器開啟 `http://127.0.0.1:13000`，第一次依畫面建立管理者帳號；密碼只能保存在本機系統鑰匙圈或正式密鑰服務。這是私有開發後台，不是公網財務系統。
 
 ## 接入金融資料的安全步驟
 

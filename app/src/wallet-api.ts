@@ -53,11 +53,19 @@ function normalizedBaseUrl(apiBaseUrl: string): string {
   return url.toString().replace(/\/+$/, '');
 }
 
+function failureMessageFrom(response: Response, fallback: string, codeMessages: Record<string, string> = {}): Promise<string> {
+  return response.clone().json().then((payload: unknown) => {
+    const code = payload && typeof payload === 'object' && !Array.isArray(payload) ? (payload as { code?: unknown }).code : undefined;
+    return typeof code === 'string' && codeMessages[code] ? codeMessages[code] : fallback;
+  }).catch(() => fallback);
+}
+
 async function requestJson<T>(
   input: WalletApiInput,
   path: string,
   init: RequestInit = {},
   failureMessage = '未能讀取錢包資料，請稍後再試。',
+  codeMessages: Record<string, string> = {},
 ): Promise<T> {
   const fetchImpl = input.fetchImpl ?? fetch;
   const response = await fetchImpl(`${normalizedBaseUrl(input.apiBaseUrl)}${path}`, {
@@ -68,7 +76,7 @@ async function requestJson<T>(
     },
   });
 
-  if (!response.ok) throw new Error(failureMessage);
+  if (!response.ok) throw new Error(await failureMessageFrom(response, failureMessage, codeMessages));
   return response.json() as Promise<T>;
 }
 
@@ -118,6 +126,15 @@ export async function allocateDepositAddress(input: WalletApiInput & { network: 
     '/v1/me/wallet-addresses',
     { body: JSON.stringify({ network: input.network }), headers: { 'Content-Type': 'application/json' }, method: 'POST' },
     '未能建立充值地址，請稍後再試。',
+    {
+      forbidden: '沒有權限建立充值地址。',
+      invalid_network: '不支援這個充值網路。',
+      signer_key_not_configured: '充值地址金鑰尚未設定。',
+      signer_rejected: '充值地址服務拒絕此次請求，請稍後再試。',
+      signer_returned_invalid_address: '充值地址格式無效。',
+      signer_unavailable: '充值地址服務尚未連上，請稍後再試。',
+      unauthenticated: '請重新登入後再試。',
+    },
   );
 
   return { address: response.address, keyVersion: response.key_version, network: response.network };

@@ -12,7 +12,7 @@
 https://hidotpay-wallet-ui.lgninhk.workers.dev
 ```
 
-這個 Worker 只提供 App 匯出的靜態畫面，沒有資料庫、API 密鑰、登入權杖或私鑰。登入後會向 `https://hidotpay-native-ledger-staging.lgninhk.workers.dev` 以 Logto access token 讀取真實餘額與交易紀錄，並可送站內轉帳。外部提現維持關閉；沒有隔離簽名器時，充值地址不會用假資料代替。`codex/**` 分支推送後，GitHub Actions 會自動重新部署此頁與帳本 Worker。
+這個 Worker 只提供 App 匯出的靜態畫面，沒有資料庫、API 密鑰、登入權杖或私鑰。登入後會向 `https://hidotpay-native-ledger-staging.lgninhk.workers.dev` 以 Logto access token 讀取真實餘額與交易紀錄，並可送站內轉帳。充值地址經隔離 xpub 簽名器配置；外部提現維持關閉。`codex/**` 分支推送後，GitHub Actions 會自動重新部署此頁、簽名器與帳本 Worker。
 
 ## 立即在網頁測試
 
@@ -34,7 +34,7 @@ http://localhost:3000/callback
 
 這個登入回調網址已在 Logto 設定中。如要把網頁伺服器改成其他埠號，請先在 Logto 的 SPA 應用程式加入對應的 `/callback` 網址，例如 `http://localhost:5173/callback`；不要自行假設已經開通。
 
-正式公開預覽的登入回調網址是 `https://hidotpay-wallet-ui.lgninhk.workers.dev/callback`。在 Logto 的 SPA 應用程式新增此網址、同網域的登出回跳網址與 CORS 網域前，公開網址只可驗證畫面與 callback 路由，不可宣稱已完成端到端登入。
+正式公開預覽的登入回調網址是 `https://hidotpay-wallet-ui.lgninhk.workers.dev/callback`，已在 Logto SPA 使用中。本機開發仍須保留 `http://localhost:3000/callback` 與對應的登出回跳網址。
 
 ## 啟用受保護錢包資料（目前不可跳過）
 
@@ -51,9 +51,9 @@ EXPO_PUBLIC_LEDGER_API_RESOURCE=https://你在 Logto 建立的 API Resource iden
 2. 在 Web、Android App 的 Logto 設定內允許這個 Resource。
 3. 在私有／受控環境部署 API，驗證 issuer、audience 和使用者權杖。
 4. Web API 入口必須設定 `CORS_ALLOWED_ORIGINS=https://你的錢包網域`；只填完全一致的網域，不可使用 `*`，本機開發才額外填 `http://localhost:3000`。
-5. 保持 `LEDGER_API_ENABLED=false` 與 `WITHDRAWALS_ENABLED=false`，直到正式簽名器、備份還原、權限與雙人覆核完成。
+5. 原生 staging 帳本 `hidotpay-native-ledger-staging` 的 `LEDGER_API_ENABLED=true`，只服務登入後的餘額、紀錄、站內轉帳與充值地址。容器版 edge API 仍維持 `LEDGER_API_ENABLED=false`。`WITHDRAWALS_ENABLED` 必須維持 `false`，直到 HSM／Turnkey、備份還原、權限與雙人覆核完成。
 
-目前 Logto 方案尚未提供 API Resource 額度，因此不能把這兩個值指向假網址來宣稱可用；詳情見 `docs/operations/logto-api-resource.md`。App 也會拒絕 HTTP API，避免把登入憑證送到不安全連線。
+目前公開預覽已使用 Logto API Resource `https://api-dev.hidotpay.com`。本機開發請把兩個值指到同一個 staging 帳本與 Resource，不要填假網址。App 也會拒絕 HTTP API，避免把登入憑證送到不安全連線。詳情見 `docs/operations/logto-api-resource.md`。
 
 另外，為了讓「登出」後能自動回到 App 首頁，Logto SPA 應用程式的 **Post sign-out redirect URIs** 也必須加入：
 

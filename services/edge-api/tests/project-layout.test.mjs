@@ -66,6 +66,8 @@ describe('financial edge worker project', () => {
     assert.match(guide, /不得為了直連資料庫改回 enableInternet=true/);
     assert.match(guide, /CORS_ALLOWED_ORIGINS/);
     assert.match(guide, /不可使用 `\*`/);
+    assert.match(guide, /DEPOSIT_SIGNER/);
+    assert.match(guide, /hidotpay-deposit-signer-staging/);
   });
 
   it('keeps the native Worker runtime unreachable before authentication and the explicit API gate', async () => {
@@ -89,6 +91,8 @@ describe('financial edge worker project', () => {
     assert.match(config, /"LOGTO_AUDIENCE": "https:\/\/api-dev\.hidotpay\.com"/);
     assert.match(config, /"LOGTO_ISSUER": "https:\/\/ngu7sy\.logto\.app\/oidc"/);
     assert.match(config, /hidotpay-wallet-ui\.lgninhk\.workers\.dev/);
+    assert.match(config, /"binding": "DEPOSIT_SIGNER"/);
+    assert.match(config, /"service": "hidotpay-deposit-signer-staging"/);
     assert.doesNotMatch(config, /DATABASE_URL|postgres(?:ql)?:\/\//i);
   });
 

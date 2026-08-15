@@ -26,8 +26,8 @@
 
 簽名服務只提供兩個私有 `POST` 路徑：`/v1/deposit-addresses` 與 `/v1/withdrawals/sign`。兩者都要求服務憑證；呼叫者身分由服務端固定，不接受 JSON 內的 `caller` 欄位。請求欄位採嚴格白名單，任何額外欄位（包含看似私鑰、seed 或任意交易資料）一律拒絕，也不會回顯。
 
-`SIGNER_DERIVATION_URL` 必須精確指向前者的私有 HTTPS 位址。這個 HTTP 邊界本身不保存金鑰；部署時只能注入經 HSM／Web3Signer 驗收的後端，測試用的記憶體簽名器不可被用於部署。
+帳本 Worker 必須以 `DEPOSIT_SIGNER` service binding 呼叫充值地址路徑，不得走公網。`SIGNER_DERIVATION_URL` 僅在沒有 binding 時作為後備，且必須精確指向 `/v1/deposit-addresses`。這個 HTTP 邊界本身不保存金鑰；部署時只能注入 account xpub 或經 HSM／Web3Signer 驗收的後端，測試用的記憶體簽名器不可被用於部署。
 
 ## 此版本的誠實狀態
 
-目前已實作並測試 signer 的隔離政策、限額、鏈別與地址驗證，以及測試網預設；尚未完成 HSM／Web3Signer 實體部署與獨立第三方安全審計。因此主網簽名功能必須保持關閉，不能宣稱已可保管真實用戶資產。
+充值地址可由隔離 Worker 以 account xpub 推導，帳本與 App 仍看不到種子或私鑰。這不是 HSM：主種子只存在操作者的離線／鑰匙圈備份，簽名器程序本身沒有私鑰。外部提領與任意資料簽名維持關閉，在完成 HSM／Web3Signer 與獨立安全審計前，不能宣稱已可保管真實用戶資產。
