@@ -3,6 +3,7 @@ import { Pool } from 'pg';
 import type { Actor } from '../../ledger-api/src/http/auth.js';
 import { isValidIdempotencyKey, requestHash } from '../../ledger-api/src/domain/idempotency.js';
 import type { P2POrderAction } from '../../ledger-api/src/domain/p2p.js';
+import { decodeWalletTransactionCursor } from '../../ledger-api/src/domain/wallet-transaction-cursor.js';
 import { OpenBaoP2PPaymentCryptographer } from '../../ledger-api/src/integrations/openbao-p2p-payment-cryptographer.js';
 import { RemoteSignerAddressDeriver } from '../../ledger-api/src/integrations/signer-address-deriver.js';
 import { PostgresLedgerRepository } from '../../ledger-api/src/repositories/postgres-ledger-repository.js';
@@ -24,7 +25,7 @@ export type NativeLedgerRuntimeEnv = {
   WITHDRAWAL_FEE_SCHEDULE?: string;
 };
 
-export type ReadOnlyWalletRepository = Pick<LedgerRepository, 'ensureUserWallet' | 'getAccount' | 'getBalances'>;
+export type ReadOnlyWalletRepository = Pick<LedgerRepository, 'ensureUserWallet' | 'getAccount' | 'getBalances' | 'listWalletTransactions'>;
 export type InternalTransferRepository = Pick<LedgerRepository, 'ensureUserWallet' | 'transferInternal'>;
 export type WithdrawalFeeQuoteRepository = Pick<LedgerRepository, 'createWithdrawalFeeQuote'>;
 export type P2PAdsRepository = Pick<PostgresP2PAdRepository, 'create' | 'listActive'>;
@@ -40,6 +41,29 @@ function invalidRequest(): Response {
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function walletTransactionPageFromRequest(request: Request): { page: { cursor?: string; limit: number } } | { error: Response } {
+  const search = new URL(request.url).searchParams;
+  const allowedKeys = new Set(['cursor', 'limit']);
+  for (const key of search.keys()) {
+    if (!allowedKeys.has(key) || search.getAll(key).length !== 1) return { error: invalidRequest() };
+  }
+
+  const cursor = search.get('cursor');
+  if (cursor !== null) {
+    if (cursor.length < 1 || cursor.length > 1024) return { error: invalidRequest() };
+    try {
+      decodeWalletTransactionCursor(cursor);
+    } catch {
+      return { error: Response.json({ code: 'invalid_wallet_transaction_cursor', message: '請求無法處理' }, { status: 400 }) };
+    }
+  }
+
+  const limitValue = search.get('limit');
+  const limit = limitValue === null ? 20 : Number(limitValue);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 50) return { error: invalidRequest() };
+  return { page: cursor === null ? { limit } : { cursor, limit } };
 }
 
 export function createReadOnlyWalletRouter(repository: ReadOnlyWalletRepository): NativeLedgerRuntime<Actor> {
@@ -59,6 +83,23 @@ export function createReadOnlyWalletRouter(repository: ReadOnlyWalletRepository)
         const wallet = await repository.ensureUserWallet(actor.id);
         const balances = await repository.getBalances(wallet.availableAccount.id);
         return Response.json({ account_id: wallet.availableAccount.id, balances });
+      }
+      if (pathname === '/v1/me/transactions') {
+        const pageResult = walletTransactionPageFromRequest(request);
+        if ('error' in pageResult) return pageResult.error;
+        const wallet = await repository.ensureUserWallet(actor.id);
+        const result = await repository.listWalletTransactions(wallet.availableAccount.id, pageResult.page);
+        return Response.json({
+          transactions: result.transactions.map((transaction) => ({
+            id: transaction.id,
+            type: transaction.type,
+            asset_code: transaction.assetCode,
+            amount_atoms: transaction.amountAtoms,
+            direction: transaction.direction,
+            created_at: transaction.createdAt,
+          })),
+          next_cursor: result.nextCursor ?? null,
+        });
       }
 
       const accountMatch = /^\/v1\/accounts\/([^/]+)\/balances$/.exec(pathname);

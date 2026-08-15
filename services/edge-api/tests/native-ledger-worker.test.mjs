@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import { DomainError } from '../../ledger-api/src/domain/errors.ts';
 import { requestHash } from '../../ledger-api/src/domain/idempotency.ts';
+import { encodeWalletTransactionCursor } from '../../ledger-api/src/domain/wallet-transaction-cursor.ts';
 import { nativeErrorResponse } from '../src/native-response.ts';
 import { createNativeLedgerHandler } from '../src/native-ledger-worker.ts';
 import * as nativeRuntime from '../src/native-ledger-runtime.ts';
@@ -201,6 +202,89 @@ test('read-only wallet routes expose only the authenticated owner\'s account and
     ['wallet', 'actor-001'],
     ['balances', '11111111-1111-4111-8111-111111111111'],
   ]);
+});
+
+test('read-only wallet transaction history is owner-scoped, cursor-paginated, and exposes no ledger internals', async () => {
+  assert.equal(typeof nativeRuntime.createReadOnlyWalletRouter, 'function');
+  const calls = [];
+  const router = nativeRuntime.createReadOnlyWalletRouter({
+    ensureUserWallet: async (ownerId) => ({
+      availableAccount: { accountKind: 'user_available', id: '11111111-1111-4111-8111-111111111111', ownerId, status: 'active' },
+      frozenAccount: { accountKind: 'user_frozen', id: '22222222-2222-4222-8222-222222222222', ownerId, status: 'active' },
+    }),
+    getAccount: async () => { throw new Error('transaction history must not look up a client-supplied account'); },
+    getBalances: async () => { throw new Error('transaction history must not read balances'); },
+    listWalletTransactions: async (accountId, page) => {
+      calls.push({ accountId, page });
+      return {
+        transactions: [{
+          amountAtoms: '1700000', assetCode: 'USDT', createdAt: '2026-08-15T01:02:03.000Z', direction: 'incoming', id: '33333333-3333-4333-8333-333333333333', type: 'deposit_confirmed',
+        }],
+        nextCursor: '2026-08-15T01:02:03.000Z|33333333-3333-4333-8333-333333333333',
+      };
+    },
+  });
+
+  const cursor = encodeWalletTransactionCursor({ createdAt: '2026-08-15T01:02:03.000Z', id: '33333333-3333-4333-8333-333333333333' });
+  const response = await router.handle(new Request(`https://wallet.example/v1/me/transactions?limit=20&cursor=${cursor}`), { id: 'actor-001', roles: [] });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    transactions: [{
+      id: '33333333-3333-4333-8333-333333333333', type: 'deposit_confirmed', asset_code: 'USDT', amount_atoms: '1700000', direction: 'incoming', created_at: '2026-08-15T01:02:03.000Z',
+    }],
+    next_cursor: '2026-08-15T01:02:03.000Z|33333333-3333-4333-8333-333333333333',
+  });
+  assert.deepEqual(calls, [{
+    accountId: '11111111-1111-4111-8111-111111111111', page: { cursor, limit: 20 },
+  }]);
+});
+
+test('read-only wallet transaction history rejects malformed pagination and cursors before accessing a wallet', async () => {
+  assert.equal(typeof nativeRuntime.createReadOnlyWalletRouter, 'function');
+  let walletCalls = 0;
+  const router = nativeRuntime.createReadOnlyWalletRouter({
+    ensureUserWallet: async () => {
+      walletCalls += 1;
+      throw new Error('invalid input must not access a wallet');
+    },
+    getAccount: async () => { throw new Error('must not be reached'); },
+    getBalances: async () => { throw new Error('must not be reached'); },
+    listWalletTransactions: async () => { throw new Error('must not be reached'); },
+  });
+
+  for (const query of ['?limit=51', '?limit=1.5', '?limit=20&limit=21', '?cursor=', '?unknown=value']) {
+    const response = await router.handle(new Request(`https://wallet.example/v1/me/transactions${query}`), { id: 'actor-001', roles: [] });
+    assert.equal(response.status, 400, query);
+    assert.deepEqual(await response.json(), { code: 'invalid_request', message: '請求格式不正確' }, query);
+  }
+  const invalidCursor = await router.handle(new Request('https://wallet.example/v1/me/transactions?cursor=not-a-cursor'), { id: 'actor-001', roles: [] });
+  assert.equal(invalidCursor.status, 400);
+  assert.deepEqual(await invalidCursor.json(), { code: 'invalid_wallet_transaction_cursor', message: '請求無法處理' });
+  assert.equal(walletCalls, 0);
+});
+
+test('read-only wallet transaction history accepts the same numeric limit coercions as the primary API', async () => {
+  assert.equal(typeof nativeRuntime.createReadOnlyWalletRouter, 'function');
+  const pages = [];
+  const router = nativeRuntime.createReadOnlyWalletRouter({
+    ensureUserWallet: async (ownerId) => ({
+      availableAccount: { accountKind: 'user_available', id: '11111111-1111-4111-8111-111111111111', ownerId, status: 'active' },
+      frozenAccount: { accountKind: 'user_frozen', id: '22222222-2222-4222-8222-222222222222', ownerId, status: 'active' },
+    }),
+    getAccount: async () => { throw new Error('must not be reached'); },
+    getBalances: async () => { throw new Error('must not be reached'); },
+    listWalletTransactions: async (_accountId, page) => {
+      pages.push(page);
+      return { transactions: [] };
+    },
+  });
+
+  for (const limit of ['01', '20.0', '1e1']) {
+    const response = await router.handle(new Request(`https://wallet.example/v1/me/transactions?limit=${limit}`), { id: 'actor-001', roles: [] });
+    assert.equal(response.status, 200, limit);
+  }
+  assert.deepEqual(pages, [{ limit: 1 }, { limit: 20 }, { limit: 10 }]);
 });
 
 test('an unavailable Logto issuer is reported as a retryable service outage', async () => {
