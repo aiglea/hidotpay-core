@@ -12,7 +12,7 @@
 | 權限 | 公開 API 驗 Logto issuer、audience 與角色；測試 header 不可在開發服務使用 | `services/ledger-api/tests/http/auth.test.ts` |
 | 後台 | NocoBase 只透過 `admin_*` 唯讀檢視表存取財務資料，沒有簽名材料欄位 | `deployment/nocobase/finance-reader-grants.sql`、`services/ledger-api/tests/admin-read-views.test.ts` |
 | P2P 託管 | 下單鎖定、放幣、退款都以獨立託管帳戶和等額雙式分錄完成；爭議只允許仲裁角色裁決 | `services/ledger-api/tests/http/p2p-orders.test.ts`、`services/ledger-api/tests/integration/p2p-order-repository.test.ts` |
-| P2P 付款逾時 | 訂單保存付款期限；只有私有排程可退款「逾時且未付款」訂單，已付款或爭議中不可自動退款 | `services/ledger-api/tests/domain/p2p-order-state.test.ts`、`services/ledger-api/tests/p2p-timeout-runner.test.ts`、`deployment/kubernetes/base/p2p-payment-expiry.yaml`；CockroachDB 實測待專用測試資料庫啟用 |
+| P2P 付款逾時 | 訂單保存付款期限；只有私有排程可退款「逾時且未付款」訂單，已付款或爭議中不可自動退款 | `services/ledger-api/tests/domain/p2p-order-state.test.ts`、`services/ledger-api/tests/p2p-timeout-runner.test.ts`、`deployment/kubernetes/base/p2p-payment-expiry.yaml`；已於獨立 CockroachDB 測試資料庫完成逾時退款實測 |
 | 工作流可用性 | dispatcher 只在 Kafka consumer 已連線後回覆 ready；停止時撤回 ready | `services/workflows/tests/runtime-health.test.ts`、Kubernetes probe |
 | 充值對帳工作流 | 已入帳事件只啟動對帳；專用 Temporal activity worker 只以不可變流水 ID 向 Blnk 對帳，排隊時持久等待 | `services/reconciliation-worker/tests/temporal-worker.integration.test.ts`、`deployment/kubernetes/base/reconciliation-worker.yaml` |
 
@@ -53,6 +53,7 @@ sh deployment/terraform/smoke-test.sh
 ### 3. 資料與帳本
 
 - CockroachDB 使用多區域／多可用區正式集群、獨立應用帳號、備份、還原演練與告警；NocoBase 帳號只能讀 `admin_*` 檢視表。
+- 每次資料庫遷移只可由一個受控部署工作執行，先在隔離資料庫驗證可重跑與還原；CockroachDB 的線上欄位／索引回填不可把結構調整和資料回填塞進同一筆 SQL 呼叫。
 - Blnk 使用私有網路、獨立最小權限 API key、可還原備份與多副本部署。以抽樣 reference 比對 CockroachDB 與 Blnk，差異必須是零或已有人工處理單。
 - 每季演練一個資料庫節點或可用區失效，核心餘額查詢與已接受提現不可遺失。
 
