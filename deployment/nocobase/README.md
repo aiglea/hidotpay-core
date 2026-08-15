@@ -14,14 +14,14 @@ NocoBase 是財務人員的檢視面板，不是帳本、簽名器或公開 API�
    docker compose -f deployment/nocobase/docker-compose.development.yaml up -d
    ```
 
-3. 在瀏覽器開啟 `http://127.0.0.1:13000`，第一次依畫面建立管理者帳號。
+3. 在瀏覽器開啟 `http://127.0.0.1:13000`，第一次依畫面建立管理者帳號；密碼只能保存在本機系統鑰匙圈或正式密鑰服務。
 
 ## 接入金融資料的安全步驟
 
 1. 先套用 Cockroach migration `012_admin_read_views.sql`。
 2. 由資料庫管理員在私有環境建立 `hidotpay_nocobase_reader`，密碼只存放於雲端密鑰服務；再只授予 `finance-reader-grants.sql` 所列的檢視表讀取權。
-3. 在 NocoBase 的資料來源設定中，使用該獨立帳號建立**唯讀**資料來源；僅加入 `admin_*` 檢視表。
-4. 在 NocoBase 建立「財務檢視者」角色：只能看地址、充值、提幣、P2P 訂單／爭議、帳本流水和風控決策；不得建立 SQL 資料來源、執行自訂動作、管理外掛或修改資料。
+3. NocoBase Community Edition 不含外接 PostgreSQL 資料來源模組，因此不得把 CockroachDB 連線帳密填入後台。使用獨立投影工作者讀取 `admin_*` 檢視表，並把可重建的查詢資料寫入 NocoBase 自己的 PostgreSQL。
+4. 在 NocoBase 建立「財務檢視者」角色：只能看地址、充值、提幣、P2P 訂單／爭議、帳本流水和風控決策；不得建立資料來源、執行自訂動作、管理外掛或修改資料。
 
 上述可看的內容不包含任何簽名材料、金鑰版本或簽名器參照。提幣核准仍經由受 Logto 角色保護的 API，不能由 NocoBase 直接改資料庫狀態。
 
