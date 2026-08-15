@@ -15,3 +15,12 @@ test('未登入首頁符合 Figma 引導版型且不顯示假餘額', () => {
   assert.match(source, /onPress=\{onSignIn\}/);
   assert.match(source, /disabled=\{busy\}/);
 });
+
+test('Cloudflare 錢包 UI 只部署 SPA 靜態資產', () => {
+  const config = read('wrangler.wallet-ui.jsonc');
+
+  assert.match(config, /"name": "hidotpay-wallet-ui"/);
+  assert.match(config, /"directory": "\.\/dist"/);
+  assert.match(config, /"not_found_handling": "single-page-application"/);
+  assert.doesNotMatch(config, /DATABASE_URL|TOKEN|SECRET|PRIVATE_KEY/);
+});

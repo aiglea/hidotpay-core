@@ -4,6 +4,16 @@
 
 沒有設定受保護 API 時，App 會顯示「錢包服務尚未啟用」。這是刻意的保護措施：不顯示假餘額、不偽造成功轉帳，也不開啟提現。
 
+## 公開引導頁預覽
+
+0.2.57 的 Figma 錢包首次引導頁已作為純靜態網頁發布於：
+
+```text
+https://hidotpay-wallet-ui.lgninhk.workers.dev
+```
+
+這個 Worker 只提供 App 匯出的靜態畫面，沒有資料庫、API 密鑰、登入權杖或私鑰。沒有受保護 API 時，頁面仍會清楚顯示服務尚未啟用，而不是顯示假餘額；充值、轉帳與提現的後端安全開關沒有因此改動。
+
 ## 立即在網頁測試
 
 在終端機依序執行：
@@ -23,6 +33,8 @@ http://localhost:3000/callback
 ```
 
 這個登入回調網址已在 Logto 設定中。如要把網頁伺服器改成其他埠號，請先在 Logto 的 SPA 應用程式加入對應的 `/callback` 網址，例如 `http://localhost:5173/callback`；不要自行假設已經開通。
+
+正式公開預覽的登入回調網址是 `https://hidotpay-wallet-ui.lgninhk.workers.dev/callback`。在 Logto 的 SPA 應用程式新增此網址、同網域的登出回跳網址與 CORS 網域前，公開網址只可驗證畫面與 callback 路由，不可宣稱已完成端到端登入。
 
 ## 啟用受保護錢包資料（目前不可跳過）
 
