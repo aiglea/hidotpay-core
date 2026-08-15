@@ -25,6 +25,51 @@ test('signer rejection releases the pre-broadcast freeze', async () => {
   assert.deepEqual(calls, [`release:${withdrawal.id}:signer policy rejected request`]);
 });
 
+test('an invalid signer response releases the pre-broadcast freeze before any chain action', async () => {
+  const calls: string[] = [];
+  const worker = new WithdrawalExecutionWorker({
+    async markBroadcast() { calls.push('mark'); },
+    async releaseBeforeBroadcast(id, reason) { calls.push(`release:${id}:${reason}`); },
+    async settleConfirmed() { calls.push('settle'); },
+  }, { broadcaster: {
+    async broadcast() { calls.push('chain'); return { confirmed: false }; },
+  }, signer: {
+    async sign() { return { chainTransactionHash: 'not-a-chain-hash', signedPayload: '' }; },
+  },
+  });
+
+  await assert.rejects(() => worker.execute(withdrawal), /signer returned an invalid signed transaction/);
+  assert.deepEqual(calls, [`release:${withdrawal.id}:signer returned an invalid signed transaction`]);
+});
+
+test('an accessor-based signer response is rejected and released before markBroadcast can read it again', async () => {
+  const calls: string[] = [];
+  let hashReads = 0;
+  const worker = new WithdrawalExecutionWorker({
+    async markBroadcast() { calls.push('mark'); },
+    async releaseBeforeBroadcast(id, reason) { calls.push(`release:${id}:${reason}`); },
+    async settleConfirmed() { calls.push('settle'); },
+  }, { broadcaster: {
+    async broadcast() { calls.push('chain'); return { confirmed: false }; },
+  }, signer: {
+    async sign() {
+      return {
+        get chainTransactionHash() {
+          hashReads += 1;
+          if (hashReads > 1) throw new Error('signer response changed after validation');
+          return '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        },
+        signedPayload: 'signed-payload',
+      } as unknown as { chainTransactionHash: string; signedPayload: string };
+    },
+  },
+  });
+
+  await assert.rejects(() => worker.execute(withdrawal), /signer returned an invalid signed transaction/);
+  assert.equal(hashReads, 0);
+  assert.deepEqual(calls, [`release:${withdrawal.id}:signer returned an invalid signed transaction`]);
+});
+
 test('a broadcast transport error never releases user funds after the transaction hash is durably recorded', async () => {
   const calls: string[] = [];
   const worker = new WithdrawalExecutionWorker({

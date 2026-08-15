@@ -36,12 +36,16 @@ export class WithdrawalExecutionWorker {
   public async execute(withdrawal: ApprovedWithdrawal): Promise<{ status: 'broadcast' | 'confirmed'; withdrawalId: string }> {
     let signed: { chainTransactionHash: string; signedPayload: string };
     try {
-      signed = await this.dependencies.signer.sign(withdrawal);
+      const response = await this.dependencies.signer.sign(withdrawal);
+      try {
+        signed = snapshotSignedTransaction(response);
+      } catch {
+        throw new Error('signer returned an invalid signed transaction');
+      }
     } catch (error) {
       await this.store.releaseBeforeBroadcast(withdrawal.id, boundedError(error));
       throw error;
     }
-    if (!/^0x[0-9a-f]{64}$/i.test(signed.chainTransactionHash) || signed.signedPayload.length === 0) throw new Error('signer returned an invalid signed transaction');
 
     await this.store.markBroadcast(withdrawal.id, signed.chainTransactionHash);
     const broadcast = await this.dependencies.broadcaster.broadcast({
@@ -53,6 +57,16 @@ export class WithdrawalExecutionWorker {
     await this.store.settleConfirmed(withdrawal.id, signed.chainTransactionHash);
     return { status: 'confirmed', withdrawalId: withdrawal.id };
   }
+}
+
+function snapshotSignedTransaction(value: unknown): { chainTransactionHash: string; signedPayload: string } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid signer response');
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const chainTransactionHash = descriptors.chainTransactionHash?.value;
+  const signedPayload = descriptors.signedPayload?.value;
+  if (typeof chainTransactionHash !== 'string' || !/^0x[0-9a-f]{64}$/i.test(chainTransactionHash)) throw new Error('invalid signer response');
+  if (typeof signedPayload !== 'string' || signedPayload.length === 0) throw new Error('invalid signer response');
+  return { chainTransactionHash, signedPayload };
 }
 
 function boundedError(error: unknown): string {
