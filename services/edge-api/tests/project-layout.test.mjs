@@ -84,8 +84,11 @@ describe('financial edge worker project', () => {
     const config = await readFile(new URL('../wrangler-native-ledger-staging.jsonc', import.meta.url), 'utf8');
     assert.match(config, /"name": "hidotpay-native-ledger-staging"/);
     assert.match(config, /"binding": "HYPERDRIVE"/);
-    assert.match(config, /"LEDGER_API_ENABLED": "false"/);
+    assert.match(config, /"LEDGER_API_ENABLED": "true"/);
     assert.match(config, /"WITHDRAWALS_ENABLED": "false"/);
+    assert.match(config, /"LOGTO_AUDIENCE": "https:\/\/api-dev\.hidotpay\.com"/);
+    assert.match(config, /"LOGTO_ISSUER": "https:\/\/ngu7sy\.logto\.app\/oidc"/);
+    assert.match(config, /hidotpay-wallet-ui\.lgninhk\.workers\.dev/);
     assert.doesNotMatch(config, /DATABASE_URL|postgres(?:ql)?:\/\//i);
   });
 

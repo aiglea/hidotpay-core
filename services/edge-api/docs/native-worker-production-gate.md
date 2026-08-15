@@ -1,10 +1,10 @@
 # 原生 Worker 啟用門檻
 
-`hidotpay-native-ledger-staging` 是 Cloudflare Workers + Hyperdrive 的封閉驗證環境。它不是正式託管環境；在本文件所有門檻都有可回看的證據前，兩個開關必須維持關閉。
+`hidotpay-native-ledger-staging` 是 Cloudflare Workers + Hyperdrive 的公開預覽帳本。Logto API Resource 已接上後，`LEDGER_API_ENABLED` 可為 `true`，讓登入者讀餘額、看紀錄與做站內轉帳。`WITHDRAWALS_ENABLED` 必須維持 `false`。沒有隔離簽名器時，充值地址路由必須失敗關閉。
 
 ```json
 {
-  "LEDGER_API_ENABLED": "false",
+  "LEDGER_API_ENABLED": "true",
   "WITHDRAWALS_ENABLED": "false"
 }
 ```
@@ -32,7 +32,7 @@
 2. 以真實 Logto token 驗證一般使用者、鏈上工作程式、財務覆核員與仲裁員的允許／拒絕情況。
 3. 以測試用 OpenBao 與私有簽名服務驗證：收款資料僅保留密文，地址衍生未暴露任何密鑰材料。
 4. 執行 Blnk 對帳、資料庫還原與 Worker 回滾演練，保存版本、時間與結果。
-5. 第二位有權限的人員覆核上述證據後，才可將 `LEDGER_API_ENABLED` 改成 `true`。`WITHDRAWALS_ENABLED` 仍維持 `false`，直到正式簽名器、白名單、限額、雙人覆核與主網演練通過。
+5. 開啟帳本讀寫後，`WITHDRAWALS_ENABLED` 仍維持 `false`，直到正式簽名器、白名單、限額、雙人覆核與主網演練通過。充值地址在簽名器未接上前必須失敗關閉。
 
 ## 回滾
 

@@ -6,7 +6,10 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "vars": {
-    "LEDGER_API_ENABLED": "false",
+    "CORS_ALLOWED_ORIGINS": "https://hidotpay-wallet-ui.lgninhk.workers.dev,http://localhost:3000",
+    "LEDGER_API_ENABLED": "true",
+    "LOGTO_AUDIENCE": "https://api-dev.hidotpay.com",
+    "LOGTO_ISSUER": "https://ngu7sy.logto.app/oidc",
     "WITHDRAWALS_ENABLED": "false"
   },
   "hyperdrive": [

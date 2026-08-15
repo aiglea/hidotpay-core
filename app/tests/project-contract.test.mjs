@@ -43,6 +43,8 @@ test('已登入使用者會進入錢包首頁，而非停留在登入測試殼',
 test('錢包服務網址是公開設定，不能是 App 內嵌密鑰', () => {
   assert.match(read('app.config.js'), /EXPO_PUBLIC_LEDGER_API_BASE_URL/);
   assert.match(read('.env.example'), /EXPO_PUBLIC_LEDGER_API_BASE_URL/);
+  assert.match(read('src/auth-config.ts'), /https:\/\/hidotpay-native-ledger-staging\.lgninhk\.workers\.dev/);
+  assert.match(read('src/auth-config.ts'), /https:\/\/api-dev\.hidotpay\.com/);
 });
 
 test('錢包首頁在桌面與窄螢幕可捲動，不會截斷充值流程', () => {

@@ -12,7 +12,7 @@
 https://hidotpay-wallet-ui.lgninhk.workers.dev
 ```
 
-這個 Worker 只提供 App 匯出的靜態畫面，沒有資料庫、API 密鑰、登入權杖或私鑰。登入後可看到餘額、充值、站內轉帳與交易紀錄畫面；沒有受保護 API 時不會顯示假餘額，也不會假裝轉帳成功。外部提現維持關閉。`codex/**` 分支推送後，GitHub Actions 會自動重新部署此頁。
+這個 Worker 只提供 App 匯出的靜態畫面，沒有資料庫、API 密鑰、登入權杖或私鑰。登入後會向 `https://hidotpay-native-ledger-staging.lgninhk.workers.dev` 以 Logto access token 讀取真實餘額與交易紀錄，並可送站內轉帳。外部提現維持關閉；沒有隔離簽名器時，充值地址不會用假資料代替。`codex/**` 分支推送後，GitHub Actions 會自動重新部署此頁與帳本 Worker。
 
 ## 立即在網頁測試
 

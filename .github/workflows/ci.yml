@@ -60,7 +60,32 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
       - run: npx expo export --platform web --output-dir dist
+        env:
+          EXPO_PUBLIC_LEDGER_API_BASE_URL: https://hidotpay-native-ledger-staging.lgninhk.workers.dev
+          EXPO_PUBLIC_LEDGER_API_RESOURCE: https://api-dev.hidotpay.com
       - run: npx wrangler@4 deploy --config wrangler.wallet-ui.jsonc --message "${{ github.event.head_commit.message }}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-ledger-api:
+    name: deploy-ledger-api
+    needs: [services]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/edge-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+        working-directory: .
+      - run: npx wrangler@4 deploy --config wrangler-native-ledger-staging.jsonc --message "${{ github.event.head_commit.message }}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
