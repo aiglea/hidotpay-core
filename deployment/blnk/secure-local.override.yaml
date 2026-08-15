@@ -1,0 +1,38 @@
+# 與官方 Blnk Compose 一起使用：
+# docker compose -f /Volumes/SING_02/hidotpay/infra/blnk/docker-compose.yaml \
+#   -f deployment/blnk/secure-local.override.yaml up -d --force-recreate
+# BLNK_SERVER_SECRET_KEY 必須由 macOS 鑰匙圈注入，不能寫入本檔。
+services:
+  server:
+    ports: !override
+      - "127.0.0.1:5001:5001"
+    environment:
+      BLNK_SERVER_SECURE: "true"
+      BLNK_SERVER_SECRET_KEY: "${BLNK_SERVER_SECRET_KEY:?BLNK_SERVER_SECRET_KEY is required}"
+
+  worker:
+    ports: !reset []
+    environment:
+      BLNK_SERVER_SECURE: "true"
+      BLNK_SERVER_SECRET_KEY: "${BLNK_SERVER_SECRET_KEY:?BLNK_SERVER_SECRET_KEY is required}"
+
+  postgres:
+    ports: !reset []
+
+  typesense:
+    ports: !reset []
+    # 官方映像檔沒有 curl/wget；以 Bash 的 TCP 支援確認真正的 HTTP 200。
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          bash -lc 'exec 3<>/dev/tcp/127.0.0.1/8108;
+          printf "GET /health HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n" >&3;
+          IFS= read -r status_line <&3;
+          [[ "$$status_line" == "HTTP/1.1 200"* ]]'
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  jaeger:
+    ports: !reset []

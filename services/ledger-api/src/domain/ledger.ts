@@ -19,6 +19,9 @@ export type LedgerTransaction = {
 export type LedgerTransactionType =
   | 'deposit_credit'
   | 'internal_transfer'
+  | 'p2p_escrow_lock'
+  | 'p2p_escrow_refund'
+  | 'p2p_escrow_release'
   | 'withdrawal_freeze'
   | 'withdrawal_release'
   | 'withdrawal_settle';
@@ -61,6 +64,33 @@ export function buildInternalTransfer(input: InternalTransferInput): LedgerTrans
   if (!/^[A-Z0-9]{2,16}$/.test(input.assetCode)) throw new DomainError('invalid_asset');
   const amountAtoms = parsePositiveAtoms(input.amountAtoms);
   return buildTransaction('internal_transfer', [
+    { accountId: input.fromAccountId, amountAtoms: (-amountAtoms).toString(), assetCode: input.assetCode },
+    { accountId: input.toAccountId, amountAtoms: amountAtoms.toString(), assetCode: input.assetCode },
+  ]);
+}
+
+export function buildP2PEscrowLock(input: InternalTransferInput): LedgerTransaction {
+  if (input.fromAccountId === input.toAccountId) throw new DomainError('same_account');
+  const amountAtoms = parsePositiveAtoms(input.amountAtoms);
+  return buildTransaction('p2p_escrow_lock', [
+    { accountId: input.fromAccountId, amountAtoms: (-amountAtoms).toString(), assetCode: input.assetCode },
+    { accountId: input.toAccountId, amountAtoms: amountAtoms.toString(), assetCode: input.assetCode },
+  ]);
+}
+
+export function buildP2PEscrowRelease(input: InternalTransferInput): LedgerTransaction {
+  if (input.fromAccountId === input.toAccountId) throw new DomainError('same_account');
+  const amountAtoms = parsePositiveAtoms(input.amountAtoms);
+  return buildTransaction('p2p_escrow_release', [
+    { accountId: input.fromAccountId, amountAtoms: (-amountAtoms).toString(), assetCode: input.assetCode },
+    { accountId: input.toAccountId, amountAtoms: amountAtoms.toString(), assetCode: input.assetCode },
+  ]);
+}
+
+export function buildP2PEscrowRefund(input: InternalTransferInput): LedgerTransaction {
+  if (input.fromAccountId === input.toAccountId) throw new DomainError('same_account');
+  const amountAtoms = parsePositiveAtoms(input.amountAtoms);
+  return buildTransaction('p2p_escrow_refund', [
     { accountId: input.fromAccountId, amountAtoms: (-amountAtoms).toString(), assetCode: input.assetCode },
     { accountId: input.toAccountId, amountAtoms: amountAtoms.toString(), assetCode: input.assetCode },
   ]);

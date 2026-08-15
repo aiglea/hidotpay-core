@@ -1,10 +1,39 @@
 {
-  "name": "hidotpay-edge-api",
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "hidotpay-edge-api-staging",
+  "main": "src/edge-worker.ts",
   "compatibility_date": "2026-08-14",
   "compatibility_flags": ["nodejs_compat"],
-  "hyperdrive": [
+  "workers_dev": true,
+  "vars": {
+    "ALLOWED_EGRESS_HOSTS": "blocked.invalid",
+    "LEDGER_API_ENABLED": "false",
+    "WITHDRAWALS_ENABLED": "false"
+  },
+  "containers": [
     {
-      "binding": "HYPERDRIVE"
+      "class_name": "LedgerContainer",
+      "image": "./Dockerfile",
+      "image_build_context": "../..",
+      "instance_type": "basic",
+      "max_instances": 1,
+      "ssh": {
+        "enabled": false
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "LEDGER_CONTAINER",
+        "class_name": "LedgerContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["LedgerContainer"]
     }
   ]
 }

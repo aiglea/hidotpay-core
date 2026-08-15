@@ -15,8 +15,19 @@ if (process.env.DATABASE_URL) {
   }
 }
 
-const result = spawnSync(process.execPath, [
-  '--import', 'tsx', '--test', 'tests/integration/transfer-repository.test.ts',
-  '--test-concurrency=1',
-], { stdio: 'inherit' });
-process.exit(result.status ?? 1);
+const testCases = [
+  { file: 'tests/integration/transfer-repository.test.ts', name: 'CockroachDB transfer is balanced and idempotent' },
+  { file: 'tests/integration/transfer-repository.test.ts', name: 'CockroachDB deposit and withdrawal lifecycle preserves a balanced ledger' },
+  { file: 'tests/integration/transfer-repository.test.ts', name: 'CockroachDB serializes competing withdrawals so a user balance never becomes negative' },
+  { file: 'tests/integration/wallet-addresses.test.ts', name: 'a user receives one persistent independent address per network, even under concurrent allocation' },
+];
+
+for (const testCase of testCases) {
+  process.stdout.write(`running integration case: ${testCase.name}\n`);
+  const result = spawnSync(process.execPath, [
+    '--import', 'tsx', '--test', '--test-concurrency=1', '--test-name-pattern', `^${testCase.name}$`,
+    testCase.file,
+  ], { stdio: 'inherit' });
+  process.stdout.write(`finished integration case: ${testCase.name} (status ${String(result.status)})\n`);
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}

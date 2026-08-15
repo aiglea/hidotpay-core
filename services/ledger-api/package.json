@@ -1,6 +1,6 @@
 {
   "name": "@hidotpay/ledger-api",
-  "version": "0.2.2",
+  "version": "0.2.45",
   "private": true,
   "type": "module",
   "engines": {
@@ -9,6 +9,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "db:migrate": "node --env-file-if-exists=.env --import tsx src/cli/migrate.ts",
+    "expire:p2p-orders": "node --env-file-if-exists=.env --import tsx src/cli/expire-p2p-orders.ts",
     "start": "node --env-file-if-exists=.env --import tsx src/server.ts",
     "test": "node --import tsx --test tests/*.test.ts tests/**/*.test.ts",
     "test:integration": "node scripts/run-integration-tests.mjs",

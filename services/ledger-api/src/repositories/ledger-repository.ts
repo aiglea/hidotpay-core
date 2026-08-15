@@ -1,8 +1,13 @@
 export type Account = {
-  accountKind: 'platform_settlement' | 'platform_treasury' | 'user_available' | 'user_frozen';
+  accountKind: 'platform_settlement' | 'platform_treasury' | 'p2p_escrow' | 'user_available' | 'user_frozen';
   id: string;
   ownerId: string;
   status: 'active' | 'closed' | 'suspended';
+};
+
+export type UserWallet = {
+  availableAccount: Account;
+  frozenAccount: Account;
 };
 
 export type Asset = {
@@ -50,13 +55,19 @@ export type WithdrawalRequest = {
   amountAtoms: string;
   assetCode: string;
   destinationAddress: string;
-  feeAtoms: string;
   feeQuoteId: string;
   fromAccountId: string;
   frozenAccountId: string;
   idempotencyKey: string;
   network: string;
   requestHash: string;
+  riskControls: WithdrawalRiskControls;
+};
+
+export type WithdrawalRiskControls = {
+  dailyLimitAtoms: string;
+  maxPerWithdrawalAtoms: string;
+  whitelistCooldownMs: number;
 };
 
 export type WithdrawalResult = {
@@ -64,11 +75,27 @@ export type WithdrawalResult = {
   withdrawalId: string;
 };
 
-export type WithdrawalStatus = 'approved' | 'confirmed' | 'failed' | 'pending_review';
+export type WithdrawalFeeQuote = {
+  expiresAt: string;
+  feeAtoms: string;
+  id: string;
+};
+
+export type CreateWithdrawalFeeQuote = {
+  amountAtoms: string;
+  assetCode: string;
+  expiresAt: string;
+  feeAtoms: string;
+  network: string;
+  userId: string;
+};
+
+export type WithdrawalStatus = 'approved' | 'broadcast' | 'confirmed' | 'failed' | 'pending_review';
 
 export type Withdrawal = {
   amountAtoms: string;
   assetCode: string;
+  chainTransactionHash?: string;
   destinationAddress: string;
   feeAtoms: string;
   frozenAccountId: string;
@@ -79,11 +106,14 @@ export type Withdrawal = {
 };
 
 export interface LedgerRepository {
+  ensureUserWallet(ownerId: string): Promise<UserWallet>;
   getAccount(accountId: string): Promise<Account>;
   getBalances(accountId: string): Promise<Array<{ assetCode: string; balanceAtoms: string }>>;
+  createWithdrawalFeeQuote(input: CreateWithdrawalFeeQuote): Promise<WithdrawalFeeQuote>;
   confirmDeposit(input: ConfirmedDeposit): Promise<DepositResult>;
   requestWithdrawal(input: WithdrawalRequest): Promise<WithdrawalResult>;
   approveWithdrawal(withdrawalId: string, reviewerId: string): Promise<Withdrawal>;
+  markWithdrawalBroadcast(withdrawalId: string, chainTransactionHash: string): Promise<Withdrawal>;
   settleWithdrawal(withdrawalId: string, chainTransactionHash: string): Promise<Withdrawal>;
   failWithdrawal(withdrawalId: string, reason: string): Promise<Withdrawal>;
   transferInternal(input: IdempotentTransfer): Promise<TransferResult>;

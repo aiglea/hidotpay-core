@@ -1,11 +1,14 @@
-import { timingSafeEqual } from 'node:crypto';
-
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 
-import type { AppConfig } from '../config.js';
 import { DomainError } from '../domain/errors.js';
 
 export type Actor = { id: string; roles: string[] };
+export type AuthenticationConfig = {
+  developmentApiKey?: string;
+  environment: 'development' | 'production' | 'test';
+  logtoAudience?: string;
+  logtoIssuer?: string;
+};
 
 function bearerToken(authorization: string | undefined): string {
   const match = /^Bearer ([A-Za-z0-9._-]+)$/.exec(authorization ?? '');
@@ -22,14 +25,14 @@ async function discoverJwks(issuer: string): Promise<ReturnType<typeof createRem
   return createRemoteJWKSet(new URL(discovery.jwks_uri));
 }
 
-export function createAuthenticator(config: AppConfig): (headers: Record<string, unknown>) => Promise<Actor> {
-  if (config.environment !== 'production') {
+export function createAuthenticator(config: AuthenticationConfig): (headers: Record<string, unknown>) => Promise<Actor> {
+  // Test identities must never be accepted by a running development or production API.
+  // They exist solely so unit tests can exercise authorization without contacting Logto.
+  if (config.environment === 'test') {
     return async (headers) => {
       if (config.developmentApiKey) {
         const provided = headers['x-hidotpay-dev-key'];
-        const expected = Buffer.from(config.developmentApiKey);
-        const received = typeof provided === 'string' ? Buffer.from(provided) : undefined;
-        if (!received || received.length !== expected.length || !timingSafeEqual(received, expected)) throw new DomainError('unauthenticated');
+        if (provided !== config.developmentApiKey) throw new DomainError('unauthenticated');
       }
       const actorId = headers['x-actor-id'];
       if (typeof actorId !== 'string' || !/^[A-Za-z0-9_-]{3,128}$/.test(actorId)) throw new DomainError('unauthenticated');
@@ -39,15 +42,23 @@ export function createAuthenticator(config: AppConfig): (headers: Record<string,
     };
   }
 
-  if (!config.logtoIssuer || !config.logtoAudience) throw new Error('production authentication is not configured');
-  const jwks = discoverJwks(config.logtoIssuer);
+  if (!config.logtoIssuer || !config.logtoAudience) {
+    return async () => { throw new DomainError('unauthenticated'); };
+  }
+  let jwks: Promise<ReturnType<typeof createRemoteJWKSet>> | undefined;
+  const getJwks = () => (jwks ??= discoverJwks(config.logtoIssuer!));
   return async (headers) => {
-    const token = bearerToken(typeof headers.authorization === 'string' ? headers.authorization : undefined);
-    const { payload } = await jwtVerify(token, await jwks, {
-      audience: config.logtoAudience,
-      issuer: config.logtoIssuer,
-    });
-    return actorFromPayload(payload);
+    try {
+      const token = bearerToken(typeof headers.authorization === 'string' ? headers.authorization : undefined);
+      const { payload } = await jwtVerify(token, await getJwks(), {
+        audience: config.logtoAudience,
+        issuer: config.logtoIssuer,
+      });
+      return actorFromPayload(payload);
+    } catch (error) {
+      if (error instanceof DomainError) throw error;
+      throw new DomainError('unauthenticated');
+    }
   };
 }
 

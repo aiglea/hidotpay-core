@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
 
+export function isValidIdempotencyKey(value: string): boolean {
+  return /^[A-Za-z0-9._:-]{8,128}$/.test(value);
+}
+
 function canonicalize(value: unknown): string {
   if (value === null || typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') {
     return JSON.stringify(value);

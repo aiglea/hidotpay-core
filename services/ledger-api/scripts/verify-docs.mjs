@@ -15,7 +15,7 @@ for (const file of required) {
 }
 
 const openapi = readFileSync('openapi/openapi.yaml', 'utf8');
-for (const endpoint of ['/internal-transfers:', '/deposits/confirmed:', '/withdrawals:', '/withdrawals/{withdrawalId}/approve:']) {
+for (const endpoint of ['/internal-transfers:', '/wallet-addresses:', '/deposits/confirmed:', '/withdrawal-fee-quotes:', '/withdrawals:', '/withdrawals/{withdrawalId}/approve:']) {
   if (!openapi.includes(endpoint)) throw new Error(`OpenAPI endpoint missing: ${endpoint}`);
 }
 console.log('documentation verified');

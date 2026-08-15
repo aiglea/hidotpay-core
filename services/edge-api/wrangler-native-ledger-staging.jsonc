@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "hidotpay-native-ledger-staging",
+  "main": "src/native-ledger-entry.ts",
+  "compatibility_date": "2026-08-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "vars": {
+    "LEDGER_API_ENABLED": "false",
+    "WITHDRAWALS_ENABLED": "false"
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "cab293cdae3e461cb46ffbefd2b5415c"
+    }
+  ]
+}

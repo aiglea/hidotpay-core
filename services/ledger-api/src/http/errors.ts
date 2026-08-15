@@ -7,6 +7,7 @@ const statusByCode: Record<string, number> = {
   account_not_found: 404,
   account_not_owned: 403,
   account_unavailable: 409,
+  authentication_unavailable: 503,
   asset_not_found: 404,
   idempotency_conflict: 409,
   insufficient_funds: 409,
@@ -15,6 +16,14 @@ const statusByCode: Record<string, number> = {
   invalid_idempotency_key: 400,
   invalid_chain_transaction: 400,
   invalid_deposit: 400,
+  invalid_fee_quote: 400,
+  fee_quote_expired: 409,
+  fee_quote_invalid: 409,
+  withdrawal_whitelist_missing: 403,
+  withdrawal_whitelist_cooling_down: 409,
+  withdrawal_limit_exceeded: 409,
+  daily_limit_exceeded: 409,
+  destination_address_blocked: 403,
   invalid_destination_address: 400,
   invalid_network: 400,
   invalid_withdrawal_failure: 400,
@@ -28,6 +37,7 @@ const statusByCode: Record<string, number> = {
   self_approval_forbidden: 403,
   unauthenticated: 401,
   withdrawal_not_found: 404,
+  withdrawals_disabled: 403,
 };
 
 export function sendError(reply: FastifyReply, error: unknown): void {

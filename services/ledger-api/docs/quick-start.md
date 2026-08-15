@@ -15,6 +15,8 @@
 3. 執行 `npm run db:migrate` 建立資料表。
 4. 執行 `npm run start:ledger`，服務會在 `http://127.0.0.1:3001` 啟動。
 
+外部提現預設關閉。要在隔離測試環境開啟時，除了 `WITHDRAWALS_ENABLED=true`，還必須設定當日限額、單筆限額與白名單冷卻秒數；提款前要先呼叫 `POST /v1/withdrawal-fee-quotes` 取得一次性報價，且目標地址必須已在白名單中超過冷卻期。這些條件不等於主網開放許可。
+
 ## 驗證
 
 ```bash

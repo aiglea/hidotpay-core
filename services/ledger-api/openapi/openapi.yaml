@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: HidoTPay Financial Core API
-  version: 0.2.0
+  version: 0.2.44
   description: |
     中央託管帳本的第一階段 API。金額一律使用最小單位字串；不可使用小數或浮點數。
     本文件不包含私鑰、簽名或鏈上廣播能力。
@@ -18,6 +18,19 @@ paths:
       responses:
         '200': { description: 成功 }
         '403': { $ref: '#/components/responses/Error' }
+  /wallet-addresses:
+    post:
+      summary: 取得本人在指定鏈的固定充值地址
+      description: 只可為本人可用帳戶配置；地址由私有 signer 衍生，API 不持有任何私鑰材料。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WalletAddressRequest' }
+      responses:
+        '200': { description: 已配置或回傳既有地址 }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
   /internal-transfers:
     post:
       summary: HidoTPay 內部轉帳（不產生鏈上手續費）
@@ -57,6 +70,20 @@ paths:
       responses:
         '201': { description: 等待審核 }
         '200': { description: 同一請求重送，回傳原結果 }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /withdrawal-fee-quotes:
+    post:
+      summary: 取得短效、一次性的提現手續費報價
+      description: 報價會綁定登入用戶、鏈、資產與提款金額；提現時必須帶回 fee_quote_id，且不得重複使用。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WithdrawalFeeQuoteRequest' }
+      responses:
+        '201': { description: 報價已建立 }
+        '409': { $ref: '#/components/responses/Error' }
   /withdrawals/{withdrawalId}/approve:
     post:
       summary: 核准提現
@@ -65,46 +92,97 @@ paths:
         - $ref: '#/components/parameters/WithdrawalId'
       responses:
         '200': { description: 已核准 }
-  /withdrawals/{withdrawalId}/settle:
+  /p2p/ads:
+    get:
+      summary: 取得可用的 P2P 廣告
+      security: []
+      responses:
+        '200': { description: 成功 }
     post:
-      summary: 寫入鏈上已確認的提現結果
-      description: 僅 chain_worker 角色可呼叫。此端點不廣播交易，只接收已確認結果。
-      parameters:
-        - $ref: '#/components/parameters/WithdrawalId'
+      summary: 以登入身分刊登 P2P 賣出廣告
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [transaction_hash]
-              properties: { transaction_hash: { type: string, minLength: 8, maxLength: 256 } }
+            schema: { $ref: '#/components/schemas/P2PAdRequest' }
       responses:
-        '200': { description: 已結算 }
-  /withdrawals/{withdrawalId}/fail:
+        '201': { description: 已建立廣告 }
+  /p2p/orders:
+    get:
+      summary: 讀取本人作為買方或賣方的 P2P 訂單
+      responses:
+        '200': { description: 成功 }
     post:
-      summary: 未核准的提現解凍
-      description: 僅 chain_worker 角色可呼叫；核准後不可用此端點解凍，必須進人工對帳流程。
+      summary: 建立 P2P 訂單並把賣方資產鎖入獨立託管帳戶
       parameters:
-        - $ref: '#/components/parameters/WithdrawalId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [reason]
-              properties: { reason: { type: string, minLength: 1, maxLength: 512 } }
+            schema: { $ref: '#/components/schemas/P2POrderRequest' }
       responses:
-        '200': { description: 已解凍 }
+        '201': { description: 訂單已建立並完成託管鎖定 }
+        '409': { $ref: '#/components/responses/Error' }
+  /p2p/orders/{orderId}/mark-paid:
+    post:
+      summary: 買方標記已完成法幣付款
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200': { description: 等待賣方放幣 }
+  /p2p/orders/{orderId}/cancel:
+    post:
+      summary: 賣方於付款前取消訂單並退款
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200': { description: 託管資產已退回賣方 }
+  /p2p/orders/{orderId}/release:
+    post:
+      summary: 賣方放行託管資產給買方
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200': { description: 資產已入帳買方 }
+  /p2p/orders/{orderId}/disputes:
+    post:
+      summary: 買賣任一方開啟爭議
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/P2PDisputeRequest' }
+      responses:
+        '200': { description: 已開啟爭議，託管資產保持鎖定 }
+  /p2p/orders/{orderId}/resolution:
+    post:
+      summary: 仲裁員裁決放幣或退款
+      description: 僅 p2p_arbitrator 角色可呼叫。
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/P2PResolutionRequest' }
+      responses:
+        '200': { description: 裁決已寫入不可變帳本 }
+        '403': { $ref: '#/components/responses/Error' }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
   parameters:
     AccountId: { name: accountId, in: path, required: true, schema: { type: string, format: uuid } }
     WithdrawalId: { name: withdrawalId, in: path, required: true, schema: { type: string, format: uuid } }
+    OrderId: { name: orderId, in: path, required: true, schema: { type: string, format: uuid } }
     IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 128 } }
   responses:
     Error:
@@ -122,6 +200,13 @@ components:
         amount_atoms: { type: string, pattern: '^[1-9][0-9]*$', example: '1000000' }
         from_account_id: { type: string, format: uuid }
         to_account_id: { type: string, format: uuid }
+    WalletAddressRequest:
+      type: object
+      additionalProperties: false
+      required: [account_id, network]
+      properties:
+        account_id: { type: string, format: uuid }
+        network: { type: string, example: ethereum-sepolia }
     ConfirmedDeposit:
       type: object
       additionalProperties: false
@@ -140,14 +225,53 @@ components:
     WithdrawalRequest:
       type: object
       additionalProperties: false
-      required: [network, destination_address, asset_code, amount_atoms, from_account_id, frozen_account_id]
+      required: [network, destination_address, asset_code, amount_atoms, fee_quote_id, from_account_id, frozen_account_id]
       properties:
         network: { type: string, example: ethereum }
         destination_address: { type: string }
         asset_code: { type: string, example: USDT }
         amount_atoms: { type: string, pattern: '^[1-9][0-9]*$' }
+        fee_quote_id: { type: string, format: uuid }
         from_account_id: { type: string, format: uuid }
         frozen_account_id: { type: string, format: uuid }
+    WithdrawalFeeQuoteRequest:
+      type: object
+      additionalProperties: false
+      required: [network, asset_code, amount_atoms]
+      properties:
+        network: { type: string, example: ethereum }
+        asset_code: { type: string, example: USDT }
+        amount_atoms: { type: string, pattern: '^[1-9][0-9]*$' }
+    P2PAdRequest:
+      type: object
+      additionalProperties: false
+      required: [asset_code, fiat_currency, price_atoms, min_amount_atoms, max_amount_atoms, payment_method_code]
+      properties:
+        asset_code: { type: string, example: USDT }
+        fiat_currency: { type: string, example: TWD }
+        price_atoms: { type: string, pattern: '^[1-9][0-9]*$' }
+        min_amount_atoms: { type: string, pattern: '^[1-9][0-9]*$' }
+        max_amount_atoms: { type: string, pattern: '^[1-9][0-9]*$' }
+        payment_method_code: { type: string, example: bank_transfer, description: 支付方式代碼，不可包含帳號或個人資料 }
+    P2POrderRequest:
+      type: object
+      additionalProperties: false
+      required: [ad_id, amount_atoms]
+      properties:
+        ad_id: { type: string, format: uuid }
+        amount_atoms: { type: string, pattern: '^[1-9][0-9]*$' }
+    P2PDisputeRequest:
+      type: object
+      additionalProperties: false
+      required: [reason_code]
+      properties:
+        reason_code: { type: string, example: payment_disputed }
+    P2PResolutionRequest:
+      type: object
+      additionalProperties: false
+      required: [outcome]
+      properties:
+        outcome: { type: string, enum: [release_to_buyer, refund_to_seller] }
     Error:
       type: object
       required: [code, message]

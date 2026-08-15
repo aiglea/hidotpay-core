@@ -1,12 +1,12 @@
 import { DomainError } from '../domain/errors.js';
-import { requestHash } from '../domain/idempotency.js';
+import { isValidIdempotencyKey, requestHash } from '../domain/idempotency.js';
 import { parseNonNegativeAtoms, parsePositiveAtoms } from '../domain/money.js';
-import type { DepositResult, LedgerRepository, WithdrawalResult } from '../repositories/ledger-repository.js';
+import type { DepositResult, LedgerRepository, WithdrawalFeeQuote as PersistedWithdrawalFeeQuote, WithdrawalResult, WithdrawalRiskControls } from '../repositories/ledger-repository.js';
 
-export type WithdrawalFeeQuote = { feeAtoms: string; quoteId: string };
+export type FeeScheduleQuote = { feeAtoms: string; quoteId: string };
 
 export interface WithdrawalFeePolicy {
-  quote(input: { amountAtoms: string; assetCode: string; network: string }): WithdrawalFeeQuote;
+  quote(input: { amountAtoms: string; assetCode: string; network: string }): FeeScheduleQuote;
 }
 
 export function fixedWithdrawalFeePolicy(schedule: Record<string, string>): WithdrawalFeePolicy {
@@ -37,14 +37,21 @@ export type WithdrawalRequestInput = {
   amountAtoms: string;
   assetCode: string;
   destinationAddress: string;
+  feeQuoteId: string;
   fromAccountId: string;
   frozenAccountId: string;
   idempotencyKey: string;
   network: string;
 };
 
+export type WithdrawalFeeQuoteInput = Pick<WithdrawalRequestInput, 'amountAtoms' | 'assetCode' | 'network'>;
+
 export class FundingService {
-  public constructor(private readonly repository: LedgerRepository, private readonly withdrawalFeePolicy: WithdrawalFeePolicy) {}
+  public constructor(
+    private readonly repository: Pick<LedgerRepository, 'confirmDeposit' | 'createWithdrawalFeeQuote' | 'requestWithdrawal'>,
+    private readonly withdrawalFeePolicy: WithdrawalFeePolicy,
+    private readonly config: { riskControls?: WithdrawalRiskControls; withdrawalsEnabled?: boolean } = {},
+  ) {}
 
   public async confirmDeposit(actorId: string, input: DepositConfirmationRequest): Promise<DepositResult> {
     parsePositiveAtoms(input.amountAtoms);
@@ -60,25 +67,43 @@ export class FundingService {
   }
 
   public async requestWithdrawal(actorId: string, input: WithdrawalRequestInput): Promise<WithdrawalResult> {
-    if (!/^[A-Za-z0-9._:-]{8,128}$/.test(input.idempotencyKey)) throw new DomainError('invalid_idempotency_key');
+    if (this.config.withdrawalsEnabled === false) throw new DomainError('withdrawals_disabled');
+    if (!isValidIdempotencyKey(input.idempotencyKey)) throw new DomainError('invalid_idempotency_key');
     if (!/^[A-Za-z0-9._:-]{2,64}$/.test(input.network)) throw new DomainError('invalid_network');
     if (input.destinationAddress.trim().length < 8 || input.destinationAddress.length > 256) throw new DomainError('invalid_destination_address');
     parsePositiveAtoms(input.amountAtoms);
-    const fee = this.withdrawalFeePolicy.quote(input);
-    parseNonNegativeAtoms(fee.feeAtoms);
     return this.repository.requestWithdrawal({
       ...input,
       actorId,
-      feeAtoms: fee.feeAtoms,
-      feeQuoteId: fee.quoteId,
+      riskControls: this.config.riskControls ?? {
+        dailyLimitAtoms: '1000000000000',
+        maxPerWithdrawalAtoms: '1000000000000',
+        whitelistCooldownMs: 24 * 60 * 60 * 1000,
+      },
       requestHash: requestHash({
         amount_atoms: input.amountAtoms,
         asset_code: input.assetCode,
         destination_address: input.destinationAddress,
+        fee_quote_id: input.feeQuoteId,
         from_account_id: input.fromAccountId,
         frozen_account_id: input.frozenAccountId,
         network: input.network,
       }),
+    });
+  }
+
+  public async quoteWithdrawalFee(actorId: string, input: WithdrawalFeeQuoteInput): Promise<PersistedWithdrawalFeeQuote> {
+    parsePositiveAtoms(input.amountAtoms);
+    if (!/^[A-Za-z0-9._:-]{2,64}$/.test(input.network)) throw new DomainError('invalid_network');
+    const fee = this.withdrawalFeePolicy.quote(input);
+    parseNonNegativeAtoms(fee.feeAtoms);
+    return this.repository.createWithdrawalFeeQuote({
+      amountAtoms: input.amountAtoms,
+      assetCode: input.assetCode,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      feeAtoms: fee.feeAtoms,
+      network: input.network,
+      userId: actorId,
     });
   }
 }

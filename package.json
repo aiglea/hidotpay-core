@@ -1,17 +1,17 @@
 {
   "name": "hidotpay-financial-core",
-  "version": "0.2.2",
+  "version": "0.2.45",
   "private": true,
   "workspaces": [
     "services/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace=@hidotpay/ledger-api",
+    "build": "npm run build --workspaces --if-present",
     "db:migrate": "npm run db:migrate --workspace=@hidotpay/ledger-api",
     "start:ledger": "npm run start --workspace=@hidotpay/ledger-api",
-    "test": "npm run test --workspace=@hidotpay/ledger-api",
-    "test:integration": "npm run test:integration --workspace=@hidotpay/ledger-api",
-    "typecheck": "npm run typecheck --workspace=@hidotpay/ledger-api",
+    "test": "npm run test --workspaces --if-present",
+    "test:integration": "npm run test:integration --workspace=@hidotpay/ledger-api && npm run test:integration --workspace=@hidotpay/deposit-worker && npm run test:integration --workspace=@hidotpay/outbox-publisher && npm run test:integration --workspace=@hidotpay/reconciliation-worker",
+    "typecheck": "npm run typecheck --workspaces --if-present",
     "verify:docs": "npm run verify:docs --workspace=@hidotpay/ledger-api"
   }
 }

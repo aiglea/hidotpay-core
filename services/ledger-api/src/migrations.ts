@@ -14,6 +14,28 @@ type Migration = {
   version: string;
 };
 
+const originalBlnkReconciliationMigration = [
+  'ALTER TABLE deposit_receipts ADD COLUMN blnk_reference STRING;',
+  'ALTER TABLE deposit_receipts ADD COLUMN blnk_transaction_id STRING;',
+  'ALTER TABLE deposit_receipts ADD COLUMN blnk_status STRING;',
+  'ALTER TABLE deposit_receipts ADD COLUMN blnk_reconciled_at TIMESTAMPTZ;',
+  'ALTER TABLE deposit_receipts ADD COLUMN blnk_last_error STRING;',
+  'ALTER TABLE deposit_receipts ADD COLUMN blnk_attempts INT8 NOT NULL DEFAULT 0 CHECK (blnk_attempts >= 0);',
+  'ALTER TABLE deposit_receipts ADD COLUMN blnk_lease_owner STRING;',
+  'ALTER TABLE deposit_receipts ADD COLUMN blnk_lease_until TIMESTAMPTZ;',
+  '',
+  'CREATE UNIQUE INDEX deposit_receipts_blnk_reference_idx ON deposit_receipts (blnk_reference) WHERE blnk_reference IS NOT NULL;',
+  'CREATE INDEX deposit_receipts_blnk_reconciliation_idx ON deposit_receipts (blnk_reconciled_at, blnk_lease_until, created_at);',
+  '',
+].join('\n');
+
+export function legacyChecksumsFor(name: string): string[] {
+  if (name === '011_blnk_reconciliation.sql') {
+    return [createHash('sha256').update(originalBlnkReconciliationMigration).digest('hex')];
+  }
+  return [];
+}
+
 async function loadMigrations(): Promise<Migration[]> {
   const entries = await readdir(migrationsDirectory);
   const names = entries.filter((entry) => /^\d+_[a-z0-9_]+\.sql$/.test(entry)).sort();
@@ -21,7 +43,7 @@ async function loadMigrations(): Promise<Migration[]> {
     const sql = await readFile(join(migrationsDirectory, name), 'utf8');
     const legacyChecksums = name === '001_financial_core.sql'
       ? [createHash('sha256').update(sql.replace('CREATE TABLE schema_migrations', 'CREATE TABLE IF NOT EXISTS schema_migrations')).digest('hex')]
-      : [];
+      : legacyChecksumsFor(name);
     return {
       checksum: createHash('sha256').update(sql).digest('hex'),
       legacyChecksums,

@@ -1,7 +1,7 @@
 # HiDot Pay Cloudflare 受控部署設計
 
 **日期：** 2026-08-15
-**狀態：** 待使用者審閱
+**狀態：** 已採用；實作中
 **範圍：** 第一階段錢包與帳本服務的 Cloudflare 對外入口與按需執行環境；不啟用主網提現。
 
 ## 目標
@@ -28,7 +28,7 @@ Cloudflare Worker
         v
 Cloudflare Container（私有帳本 API）
   - Fastify ledger-api
-  - Hyperdrive / 私有資料庫連線
+  - 受限 CockroachDB TLS 連線
   - Blnk、Redpanda、Temporal 的受限服務憑證
         |
         +--> CockroachDB / Blnk
@@ -41,7 +41,7 @@ Cloudflare Container（私有帳本 API）
 | 元件 | 可以做 | 絕對不能做 |
 | --- | --- | --- |
 | Cloudflare Worker | 驗證登入、限流、呼叫私有帳本 API、回傳公開資料 | 讀取或產生私鑰、任意交易簽名、直接修改帳本資料庫 |
-| Cloudflare Container | 執行既有 Fastify 帳本 API、處理受控資料庫連線 | 保存私鑰、略過風控或雙人審批 |
+| Cloudflare Container | 執行既有 Fastify 帳本 API、以專屬最小權限帳號連線 CockroachDB | 保存私鑰、略過風控或雙人審批 |
 | signer | 依核准的結構化請求衍生地址與簽名 | 對 App、Worker、NocoBase 或一般 API 開放 |
 | NocoBase | 顯示 `admin_*` 唯讀檢視表與財務營運資料 | 直寫帳本、取得 signer 或金鑰資料 |
 
@@ -52,11 +52,20 @@ Cloudflare Container（私有帳本 API）
 3. `SIGNER_SERVICE_TOKEN` 只允許 ledger API 與 withdrawal worker 使用，並由私有網路和 mTLS 再次限制。
 4. `WITHDRAWALS_ENABLED=false` 是所有 Cloudflare 環境的預設，直至實體 signer、測試網全流程、雙人覆核及上線驗收都完成。
 
+### Container 資料庫連線界線
+
+Cloudflare Hyperdrive 是 Worker 的資料庫加速/連線功能，不是 Container 的私網路功能；本服務也不能把現有 `pg` 直接搬進 Worker，因為已實測不相容。因此第一階段採取下列可驗證邊界：
+
+1. 公開 Worker 程式不使用 `DATABASE_URL`，只經由受控服務 API 呼叫 Container。Cloudflare Container 目前由同一個 Worker 執行環境把 Secret 傳入，因此這不是獨立 IAM 邊界；資料庫帳號必須本身維持最小權限。
+2. Container 接收專屬的 `DATABASE_URL` Secret，該帳號只擁有帳本 API 所需的 schema/table 權限，連線全程使用 CockroachDB TLS。
+3. Container 出站採 deny-by-default 主機白名單，只放行 CockroachDB、Logto、Blnk、工作流和 signer 的確切主機名；每個主機在 staging 必須有連通性證據。
+4. 不把「Cloudflare Container 有私網」當成已成立的安全主張。若日後 CockroachDB 可置於本方私網，才以 Cloudflare Tunnel、Workers VPC（目前仍為 beta）和 Hyperdrive 建立額外私網路徑；這是 production 加固項目，不是本次假設。
+
 ## 首次部署範圍
 
 1. 建立 `hidotpay-edge-api` Worker：只提供 `/healthz` 與已驗證的反向代理骨架。
 2. 建立 Cloudflare Container 映像與私有服務設定，承載現有 `ledger-api`，不配置主網出金。
-3. 由 Hyperdrive 或 Cloudflare 私有連線將 Container 接到 CockroachDB；資料庫帳號僅允許服務所需權限。
+3. 以 Container 專屬、最小權限且 TLS 強制的 CockroachDB 帳號連線；公開 Worker 程式不得對該連線字串建立資料庫客戶端。
 4. 建立 staging 環境，先驗證 Logto、帳本讀取、地址配置與站內轉帳；外部提現維持拒絕。
 5. 僅在 staging 連續通過回歸、資料庫整合、容器健康檢查與帳本對帳後，才提出 production 部署申請。
 

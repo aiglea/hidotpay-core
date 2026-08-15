@@ -1,0 +1,42 @@
+name: hidotpay-nocobase-development
+
+services:
+  app:
+    image: nocobase/nocobase:1.7.14-full
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_KEY: ${HIDOTPAY_NOCOBASE_APP_KEY:?set HIDOTPAY_NOCOBASE_APP_KEY outside Git}
+      DB_DATABASE: nocobase
+      DB_DIALECT: postgres
+      DB_HOST: postgres
+      DB_PASSWORD: ${HIDOTPAY_NOCOBASE_DB_PASSWORD:?set HIDOTPAY_NOCOBASE_DB_PASSWORD outside Git}
+      DB_PORT: "5432"
+      DB_USER: nocobase
+      TZ: Asia/Taipei
+    ports:
+      - "127.0.0.1:13000:80"
+    volumes:
+      - nocobase-development-storage:/app/nocobase/storage
+
+  postgres:
+    image: postgres:16.11-alpine
+    command: postgres -c wal_level=logical
+    environment:
+      POSTGRES_DB: nocobase
+      POSTGRES_PASSWORD: ${HIDOTPAY_NOCOBASE_DB_PASSWORD:?set HIDOTPAY_NOCOBASE_DB_PASSWORD outside Git}
+      POSTGRES_USER: nocobase
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nocobase -d nocobase"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "127.0.0.1:15433:5432"
+    volumes:
+      - nocobase-development-postgres:/var/lib/postgresql/data
+
+volumes:
+  nocobase-development-postgres:
+  nocobase-development-storage:

@@ -1,0 +1,38 @@
+#!/bin/sh
+set -eu
+
+kubectl kustomize "$(dirname "$0")/base" >/dev/null
+grep -q '/health/live' "$(dirname "$0")/base/workflow-dispatcher.yaml"
+grep -q '/health/ready' "$(dirname "$0")/base/workflow-dispatcher.yaml"
+test -s "$(dirname "$0")/base/reconciliation-worker.yaml"
+grep -q 'RECONCILIATION_WORKER_ID' "$(dirname "$0")/base/reconciliation-worker.yaml"
+grep -q '/health/ready' "$(dirname "$0")/base/reconciliation-worker.yaml"
+test -s "$(dirname "$0")/base/ledger-api.yaml"
+grep -q 'WITHDRAWALS_ENABLED' "$(dirname "$0")/base/ledger-api.yaml"
+grep -q 'value: "false"' "$(dirname "$0")/base/ledger-api.yaml"
+grep -q '/healthz' "$(dirname "$0")/base/ledger-api.yaml"
+grep -q 'SIGNER_DERIVATION_URL' "$(dirname "$0")/README.md"
+grep -q 'SIGNER_SERVICE_TOKEN' "$(dirname "$0")/README.md"
+grep -q 'topology.kubernetes.io/zone' "$(dirname "$0")/base/ledger-api.yaml"
+grep -q 'topology.kubernetes.io/zone' "$(dirname "$0")/base/workflow-dispatcher.yaml"
+grep -q 'topology.kubernetes.io/zone' "$(dirname "$0")/base/reconciliation-worker.yaml"
+test -s "$(dirname "$0")/base/outbox-publisher.yaml"
+grep -q 'OUTBOX_PUBLISHER_ID' "$(dirname "$0")/base/outbox-publisher.yaml"
+grep -q '/health/ready' "$(dirname "$0")/base/outbox-publisher.yaml"
+grep -q 'topology.kubernetes.io/zone' "$(dirname "$0")/base/outbox-publisher.yaml"
+test -s "$(dirname "$0")/base/deposit-worker.yaml"
+grep -q 'DEPOSIT_EVM_NETWORKS' "$(dirname "$0")/README.md"
+grep -q '/health/ready' "$(dirname "$0")/base/deposit-worker.yaml"
+grep -q 'topology.kubernetes.io/zone' "$(dirname "$0")/base/deposit-worker.yaml"
+test -s "$(dirname "$0")/base/p2p-payment-expiry.yaml"
+grep -q 'kind: CronJob' "$(dirname "$0")/base/p2p-payment-expiry.yaml"
+grep -q 'concurrencyPolicy: Forbid' "$(dirname "$0")/base/p2p-payment-expiry.yaml"
+grep -q 'expire-p2p-orders.js' "$(dirname "$0")/base/p2p-payment-expiry.yaml"
+grep -q 'hidotpay-p2p-payment-expiry' "$(dirname "$0")/base/p2p-payment-expiry.yaml"
+test -s "$(dirname "$0")/../../services/ledger-api/Dockerfile"
+test -s "$(dirname "$0")/../../services/outbox-publisher/Dockerfile"
+test -s "$(dirname "$0")/../../services/deposit-worker/Dockerfile"
+if grep -R -Eiq 'private.?key|mnemonic|seed|root.?token' "$(dirname "$0")/base"; then
+  echo "Kubernetes manifests contain prohibited custody material" >&2
+  exit 1
+fi

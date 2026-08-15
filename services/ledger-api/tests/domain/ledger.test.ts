@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildInternalTransfer, buildTransaction, sumPostings } from '../../src/domain/ledger.js';
+import { buildInternalTransfer, buildP2PEscrowLock, buildP2PEscrowRefund, buildP2PEscrowRelease, buildTransaction, sumPostings } from '../../src/domain/ledger.js';
 
 const fromAccountId = '0b6f6cdc-2974-45a0-a2d0-c1282e382771';
 const toAccountId = 'a1adc47c-46c4-4482-af47-4f4d608e15c5';
@@ -27,6 +27,17 @@ test('internal transfer refuses a self transfer', () => {
     fromAccountId,
     toAccountId: fromAccountId,
   }), /same_account/);
+});
+
+test('P2P escrow lock, release, and refund each remain balanced ledger transactions', () => {
+  for (const transaction of [
+    buildP2PEscrowLock({ amountAtoms: '7000000', assetCode: 'USDT', fromAccountId: 'seller-available', toAccountId: 'order-escrow' }),
+    buildP2PEscrowRelease({ amountAtoms: '7000000', assetCode: 'USDT', fromAccountId: 'order-escrow', toAccountId: 'buyer-available' }),
+    buildP2PEscrowRefund({ amountAtoms: '7000000', assetCode: 'USDT', fromAccountId: 'order-escrow', toAccountId: 'seller-available' }),
+  ]) {
+    assert.equal(sumPostings(transaction.postings), 0n);
+    assert.equal(transaction.postings.length, 2);
+  }
 });
 
 test('ledger accepts a balanced multi-party settlement and rejects an unbalanced one', () => {

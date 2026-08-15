@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: p2p-payment-expiry
+  namespace: hidotpay-financial
+automountServiceAccountToken: false
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: p2p-payment-expiry
+  namespace: hidotpay-financial
+spec:
+  schedule: "* * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 120
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 6
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      activeDeadlineSeconds: 240
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: p2p-payment-expiry
+        spec:
+          serviceAccountName: p2p-payment-expiry
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: expiry
+              image: ghcr.io/hidotpay/ledger-api:0.2.44
+              imagePullPolicy: IfNotPresent
+              command:
+                - node
+                - --enable-source-maps
+                - services/ledger-api/dist/cli/expire-p2p-orders.js
+              envFrom:
+                - secretRef:
+                    name: hidotpay-p2p-payment-expiry
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+                readOnlyRootFilesystem: true
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: p2p-payment-expiry-private-egress
+  namespace: hidotpay-financial
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: p2p-payment-expiry
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              hidotpay.io/plane: infrastructure
+      ports:
+        - protocol: TCP
+          port: 26257
