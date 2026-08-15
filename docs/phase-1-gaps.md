@@ -1,7 +1,7 @@
 # 第一階段完成度與正式上線缺口
 
 更新日期：2026-08-15
-適用版本：0.2.55 起
+適用版本：0.2.56 起
 
 這份表把「程式已完成並驗證」和「外部環境已正式驗收」分開。任何標示為外部驗收未完成的項目，都表示不能開啟真實資產充值或提現。
 
@@ -12,7 +12,7 @@
 | 帳戶登入與公開 API 身分邊界 | Logto token 必須符合簽發者與 API 對象；未登入請求不會建立錢包或連資料庫 | `services/ledger-api/tests/http/auth.test.ts`、`services/edge-api/tests/native-ledger-worker.test.mjs` |
 | 不可變帳本 | 站內轉帳、充值、提現凍結與 P2P 託管均以平衡分錄保存；一般帳戶不可為負 | `services/ledger-api/tests/integration/transfer-repository.test.ts` |
 | 獨立充值地址 | 同一使用者同一鏈得到穩定地址；不同使用者不共用；併發不會重複配置 | `services/ledger-api/tests/integration/wallet-addresses.test.ts` |
-| 多鏈充值觀測 | EVM 與 TRON 只處理已啟用官方資產，並依確認門檻、游標、重組視窗與事件去重入帳 | `services/deposit-worker/tests/*.test.ts` |
+| 多鏈充值觀測 | EVM 與 TRON 只處理已啟用官方資產，並依確認門檻、游標、重組視窗與事件去重入帳；掃描器只前進到安全水位，深度重組及歷史 `orphaned + receipt` 一律失敗關閉 | `services/deposit-worker/tests/*.test.ts`、`docs/operations/deposit-reorg-response.md` |
 | 站內免費轉帳 | 已驗證只能扣自己的可用餘額、可重送不重扣、不會產生鏈上簽名或 gas | `services/ledger-api/tests/http/internal-transfers.test.ts` |
 | 提現保護規則 | 預設拒絕提現；手續費報價、白名單冷卻、日限額、單筆限額與凍結規則已受測試覆蓋 | `services/ledger-api/tests/services/risk-service.test.ts`、`services/withdrawal-worker/tests/withdrawal-execution.test.ts` |
 | P2P 託管 | 廣告、下單、鎖定、買家付款、賣家放幣、逾時退款、爭議仲裁和付款資訊遮罩均有角色與帳本測試 | `services/ledger-api/tests/http/p2p-orders.test.ts`、`services/ledger-api/tests/integration/p2p-order-repository.test.ts` |
@@ -33,9 +33,9 @@
 
 以下依風險排序；第一項完成前，所有真實資產開關都必須保持關閉。
 
-### 發布阻擋：2026-08-15 發現的程式 P0
+### 已修正程式 P0，但仍是發布關卡
 
-**充值鏈重組安全**：舊掃描器可能在重組後把已入帳觀測標示為失效，卻不會以安全方式處理既有帳本餘額。修正採「安全水位後才入帳；深度重組停機並交由雙人覆核」設計，尚未完成程式／專用資料庫驗證前，不得發布此分支候選版或啟用任何真實充值。
+**充值鏈重組安全**：安全水位、深度重組失敗關閉與歷史 `orphaned + receipt` 防護已完成程式修正；正常流程不會自動扣減使用者、寫入反向 posting 或改寫不可變總帳。惟**專用 `hidotpay_test` 真實資料庫驗證仍是發布關卡**；在該證據、雙人事故恢復演練及後述外部 P0 門檻完成前，不得發布此分支候選版、恢復受影響網路掃描或啟用任何真實充值。事故處置依 `docs/operations/deposit-reorg-response.md` 執行。
 
 ### P0：必須先完成
 
