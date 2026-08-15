@@ -25,6 +25,25 @@ const policy = new ChainAssetPolicyRegistry([{
   assetCode: 'USDT', contractIdentifier: 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj', decimals: 6, depositEnabled: true, feeAssetCode: 'TRX', minimumConfirmations: 3, network: 'tron-shasta', withdrawalEnabled: true,
 }]);
 
+test('scanner returns safely without side effects when no safe block is available', async () => {
+  const adapter = new FixtureAdapter();
+  adapter.head = 8;
+  const store = new InMemoryDepositScanStore();
+  const credited: string[] = [];
+  const scanner = new DepositScanner(adapter, store, policy, { reorgWindow: 2 }, {
+    async credit(observation) { credited.push(observation.transactionHash); },
+  });
+  const target = { accountId: 'account-1', address: 'T111111111111111111111111111111111', assetCode: 'USDT' };
+
+  const result = await scanner.scan([target], 7);
+
+  assert.deepEqual(result, { candidates: 0, fromBlock: 7, head: 8, reorgRecovered: false });
+  assert.deepEqual(adapter.queries, []);
+  assert.deepEqual(credited, []);
+  assert.equal(await store.cursor('tron-shasta'), undefined);
+  assert.deepEqual(store.observations(), []);
+});
+
 test('scanner only scans through the safe head and never advances its cursor into the reorg window', async () => {
   const adapter = new FixtureAdapter();
   const store = new InMemoryDepositScanStore();
