@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import { decodeWalletTransactionCursor, encodeWalletTransactionCursor } from '../../src/domain/wallet-transaction-cursor.js';
 import { InMemoryLedgerRepository } from '../../src/repositories/in-memory-ledger-repository.js';
+import { PostgresLedgerRepository } from '../../src/repositories/postgres-ledger-repository.js';
 
 const ownerId = 'a55efebe-c9f7-44f9-9b17-217d1744b9d9';
 const recipientId = 'c3738f6d-3e7c-4cfa-b5f3-6dd2a7b8da1c';
@@ -86,7 +87,51 @@ test('wallet transaction cursors round trip and reject malformed or non-canonica
   const value = { createdAt: '2026-08-15T10:01:00.000Z', id: '51e2546c-9177-4fdb-9b0b-9e0d5902230f' };
   assert.deepEqual(decodeWalletTransactionCursor(encodeWalletTransactionCursor(value)), value);
 
+  const microsecondValue = { createdAt: '2026-08-15T10:01:00.123456Z', id: '51e2546c-9177-4fdb-9b0b-9e0d5902230f' };
+  assert.deepEqual(decodeWalletTransactionCursor(encodeWalletTransactionCursor(microsecondValue)), microsecondValue);
+
   assert.throws(() => decodeWalletTransactionCursor('not-a-cursor'), { code: 'invalid_wallet_transaction_cursor' });
   const malformed = Buffer.from(JSON.stringify({ ...value, createdAt: '2026-08-15T18:01:00+08:00' })).toString('base64url');
   assert.throws(() => decodeWalletTransactionCursor(malformed), { code: 'invalid_wallet_transaction_cursor' });
+});
+
+test('wallet transaction pages reject limits above 50', async () => {
+  const repository = createRepository(() => new Date('2026-08-15T10:00:00.000Z'));
+
+  await assert.rejects(
+    () => repository.listWalletTransactions(ownerAccountId, { limit: 51 }),
+    { code: 'invalid_wallet_transaction_page' },
+  );
+});
+
+test('PostgreSQL wallet history retains microseconds in the response cursor', async () => {
+  const createdAt = '2026-08-15T10:01:00.123456Z';
+  const calls: Array<{ parameters: unknown[]; query: string }> = [];
+  const pool = {
+    async query(query: string, parameters: unknown[]) {
+      calls.push({ parameters, query });
+      return {
+        rows: [{
+          amount_atoms: '-500000',
+          asset_code: 'USDT',
+          created_at: createdAt,
+          id: '51e2546c-9177-4fdb-9b0b-9e0d5902230f',
+          transaction_type: 'internal_transfer',
+        }, {
+          amount_atoms: '-1000000',
+          asset_code: 'USDT',
+          created_at: '2026-08-15T10:00:00.000001Z',
+          id: '4c7f3f94-4780-4d06-bb6f-30ef08d30d7c',
+          transaction_type: 'internal_transfer',
+        }],
+      };
+    },
+  };
+  const repository = new PostgresLedgerRepository(pool as never);
+
+  const page = await repository.listWalletTransactions(ownerAccountId, { limit: 1 });
+
+  assert.equal(page.transactions[0]?.createdAt, createdAt);
+  assert.equal(decodeWalletTransactionCursor(page.nextCursor ?? '').createdAt, createdAt);
+  assert.match(calls[0]?.query ?? '', /to_char\(transactions\.created_at AT TIME ZONE 'UTC'/);
 });

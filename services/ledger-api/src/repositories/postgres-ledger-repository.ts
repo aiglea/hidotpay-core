@@ -71,7 +71,7 @@ type WithdrawalWhitelistRow = {
 type WalletTransactionRow = {
   amount_atoms: string;
   asset_code: string;
-  created_at: Date;
+  created_at: string;
   id: string;
   transaction_type: string;
 };
@@ -83,7 +83,7 @@ function toWalletTransactionPage(rows: WalletTransactionRow[], limit: number): W
     return {
       amountAtoms: (amountAtoms < 0n ? -amountAtoms : amountAtoms).toString(),
       assetCode: row.asset_code,
-      createdAt: row.created_at.toISOString(),
+      createdAt: row.created_at,
       direction: amountAtoms < 0n ? 'outgoing' : 'incoming',
       id: row.id,
       type: row.transaction_type,
@@ -143,11 +143,12 @@ export class PostgresLedgerRepository implements LedgerRepository {
   }
 
   public async listWalletTransactions(accountId: string, page: WalletTransactionPageRequest): Promise<WalletTransactionPage> {
-    if (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 100) throw new DomainError('invalid_wallet_transaction_page');
+    if (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 50) throw new DomainError('invalid_wallet_transaction_page');
     const cursor = page.cursor ? decodeWalletTransactionCursor(page.cursor) : undefined;
     const rows = await this.pool.query<WalletTransactionRow>(
       `SELECT transactions.id, transactions.transaction_type, postings.asset_code,
-              postings.amount_atoms::STRING, transactions.created_at
+              postings.amount_atoms::STRING,
+              to_char(transactions.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at
          FROM ledger_postings AS postings
          JOIN ledger_transactions AS transactions ON transactions.id = postings.transaction_id
         WHERE postings.account_id = $1

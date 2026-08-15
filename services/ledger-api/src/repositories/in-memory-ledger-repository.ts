@@ -341,7 +341,7 @@ export class InMemoryLedgerRepository implements LedgerRepository {
   }
 
   private requireWalletTransactionPage(page: WalletTransactionPageRequest): void {
-    if (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 100) throw new DomainError('invalid_wallet_transaction_page');
+    if (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 50) throw new DomainError('invalid_wallet_transaction_page');
   }
 
   private toWalletTransactionPage(rows: StoredWalletTransaction[], limit: number): WalletTransactionPage {

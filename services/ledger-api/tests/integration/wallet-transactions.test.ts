@@ -36,8 +36,8 @@ test('CockroachDB wallet transaction history is account-isolated and keyset-pagi
     await pool.query(
       `INSERT INTO ledger_transactions (id, transaction_type, idempotency_scope, idempotency_key, request_hash, actor_id, created_at)
        VALUES
-       ($1, 'internal_transfer', $2, $3, $4, $5, '2026-08-15T10:00:00.000Z'),
-       ($6, 'internal_transfer', $7, $8, $9, $10, '2026-08-15T10:01:00.000Z')`,
+       ($1, 'internal_transfer', $2, $3, $4, $5, '2026-08-15T10:01:00.123456Z'),
+       ($6, 'internal_transfer', $7, $8, $9, $10, '2026-08-15T10:01:00.123457Z')`,
       [firstTransactionId, randomUUID(), randomUUID(), randomUUID(), randomUUID(), secondTransactionId, randomUUID(), randomUUID(), randomUUID(), randomUUID()],
     );
     await pool.query(
@@ -50,12 +50,12 @@ test('CockroachDB wallet transaction history is account-isolated and keyset-pagi
 
     const firstPage = await repository.listWalletTransactions(ownerAccountId, { limit: 1 });
     assert.deepEqual(firstPage.transactions, [{
-      amountAtoms: '500000', assetCode, createdAt: '2026-08-15T10:01:00.000Z', direction: 'outgoing', id: secondTransactionId, type: 'internal_transfer',
+      amountAtoms: '500000', assetCode, createdAt: '2026-08-15T10:01:00.123457Z', direction: 'outgoing', id: secondTransactionId, type: 'internal_transfer',
     }]);
     assert.ok(firstPage.nextCursor);
     assert.deepEqual(await repository.listWalletTransactions(ownerAccountId, { cursor: firstPage.nextCursor, limit: 1 }), {
       transactions: [{
-        amountAtoms: '1000000', assetCode, createdAt: '2026-08-15T10:00:00.000Z', direction: 'outgoing', id: firstTransactionId, type: 'internal_transfer',
+        amountAtoms: '1000000', assetCode, createdAt: '2026-08-15T10:01:00.123456Z', direction: 'outgoing', id: firstTransactionId, type: 'internal_transfer',
       }],
     });
     assert.equal((await repository.listWalletTransactions(recipientAccountId, { limit: 1 })).transactions[0]?.direction, 'incoming');

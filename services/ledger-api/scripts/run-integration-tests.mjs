@@ -1,5 +1,7 @@
 import { spawnSync } from 'node:child_process';
 
+import { Pool } from 'pg';
+
 const testDatabaseUrl = process.env.HIDOTPAY_TEST_DATABASE_URL;
 if (!testDatabaseUrl) {
   process.stdout.write('HIDOTPAY_TEST_DATABASE_URL is not configured; integration tests skipped.\n');
@@ -15,6 +17,21 @@ if (process.env.DATABASE_URL) {
     throw new Error('HIDOTPAY_TEST_DATABASE_URL must not target the same database as DATABASE_URL.');
   }
 }
+const testPool = new Pool({ connectionString: testDatabaseUrl });
+let testDatabaseExists = true;
+try {
+  await testPool.query('SELECT 1');
+} catch (error) {
+  if (error && typeof error === 'object' && error.code === '3D000') {
+    process.stdout.write('HIDOTPAY_TEST_DATABASE_URL database does not exist; integration tests skipped.\n');
+    testDatabaseExists = false;
+  } else {
+    throw error;
+  }
+} finally {
+  await testPool.end();
+}
+if (!testDatabaseExists) process.exit(0);
 
 const testCases = [
   { file: 'tests/integration/transfer-repository.test.ts', name: 'CockroachDB transfer is balanced and idempotent' },

@@ -6,6 +6,7 @@ export type WalletTransactionCursor = {
 };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const timestampPattern = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\.(\d{3}|\d{6})Z$/;
 
 export function encodeWalletTransactionCursor(value: WalletTransactionCursor): string {
   return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
@@ -30,6 +31,10 @@ function isWalletTransactionCursor(value: unknown): value is WalletTransactionCu
   if (entries.length !== 2 || !Object.hasOwn(value, 'createdAt') || !Object.hasOwn(value, 'id')) return false;
   const { createdAt, id } = value as Record<string, unknown>;
   if (typeof createdAt !== 'string' || typeof id !== 'string' || !uuidPattern.test(id)) return false;
-  const date = new Date(createdAt);
-  return !Number.isNaN(date.valueOf()) && date.toISOString() === createdAt;
+  const timestamp = timestampPattern.exec(createdAt);
+  if (!timestamp) return false;
+  const [, secondPrecision, fraction] = timestamp;
+  if (!secondPrecision || !fraction) return false;
+  const date = new Date(`${secondPrecision}.${fraction.slice(0, 3)}Z`);
+  return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 19) === secondPrecision;
 }
