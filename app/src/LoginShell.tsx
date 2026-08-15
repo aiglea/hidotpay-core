@@ -20,58 +20,118 @@ export function LoginShell({
   onSignOut,
   children,
 }: LoginShellProps) {
+  if (!authenticated) {
+    return (
+      <View style={styles.page}>
+        <View style={styles.onboardingFrame}>
+          <Pressable
+            accessibilityLabel="略過引導並登入"
+            accessibilityRole="button"
+            disabled={busy}
+            onPress={onSignIn}
+            style={({ pressed }) => [styles.skipButton, busy && styles.buttonDisabled, pressed && styles.buttonPressed]}
+          >
+            <Text style={styles.skipText}>略過</Text>
+          </Pressable>
+
+          <View style={styles.walletScene}>
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.gridOrb}>
+              <View style={styles.gridRing} />
+              <View style={styles.gridLineHorizontal} />
+              <View style={styles.gridLineVertical} />
+            </View>
+
+            <View style={styles.summaryCard}>
+              <View style={styles.brandRow}>
+                <View style={styles.mark}>
+                  <View style={styles.markDot} />
+                </View>
+                <Text style={styles.brand}>hidotpay</Text>
+              </View>
+              <Text style={styles.summaryEyebrow}>你的錢包</Text>
+              <Text style={styles.summaryTitle}>安全錢包</Text>
+              <Text style={styles.summaryBody}>登入後顯示可用資產</Text>
+              <View style={styles.actionRow}>
+                <Pressable
+                  accessibilityLabel="轉帳功能需登入後使用"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: true }}
+                  disabled
+                  style={styles.actionPill}
+                >
+                  <Text style={styles.actionPillText}>轉帳</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityLabel="收款功能需登入後使用"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: true }}
+                  disabled
+                  style={styles.actionPill}
+                >
+                  <Text style={styles.actionPillText}>收款</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.onboardingCard}>
+            <Text style={styles.onboardingEyebrow}>hidotpay</Text>
+            <Text style={styles.onboardingTitle}>一個更安心的開始</Text>
+            <Text style={styles.onboardingBody}>使用安全帳戶登入後，即可查看你的可用資產與錢包服務。</Text>
+            {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
+            {children}
+
+            <View accessibilityLabel="第 1 頁，共 3 頁" accessibilityRole="progressbar" style={styles.dots}>
+              <View style={[styles.dot, styles.dotActive]} />
+              <View style={styles.dot} />
+              <View style={styles.dot} />
+            </View>
+            <Pressable
+              accessibilityLabel="開始使用並登入"
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={onSignIn}
+              style={({ pressed }) => [styles.primaryButton, busy && styles.buttonDisabled, pressed && styles.buttonPressed]}
+            >
+              {busy ? <ActivityIndicator color="#111111" /> : <Text style={styles.primaryButtonText}>開始使用</Text>}
+            </Pressable>
+            <Text style={styles.note}>登入會在 hidotpay 的安全帳戶頁面完成。</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.page}>
-      <View style={styles.glow} />
-      <View style={styles.card}>
+      <View style={styles.authCard}>
         <View style={styles.brandRow}>
           <View style={styles.mark}>
             <View style={styles.markDot} />
           </View>
           <Text style={styles.brand}>hidotpay</Text>
         </View>
-
-        <Text style={styles.eyebrow}>ACCOUNT ACCESS</Text>
-        <Text style={styles.title}>
-          {authenticated ? '已安全登入' : '你的支付帳戶，從安全登入開始'}
-        </Text>
-        <Text style={styles.body}>
-          {authenticated
-            ? '目前登入帳戶'
-            : '登入或建立帳戶會在 hidotpay 的安全帳戶頁面完成。'}
-        </Text>
-
-        {authenticated ? (
-          <View style={styles.profile}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{(username ?? 'U').slice(0, 1).toUpperCase()}</Text>
-            </View>
-            <View style={styles.profileText}>
-              <Text style={styles.username} numberOfLines={1}>
-                {username ?? '使用者'}
-              </Text>
-              <Text style={styles.status}>帳戶已驗證</Text>
-            </View>
+        <Text style={styles.summaryEyebrow}>帳戶狀態</Text>
+        <Text style={styles.authTitle}>已安全登入</Text>
+        <View style={styles.profile}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{(username ?? 'U').slice(0, 1).toUpperCase()}</Text>
           </View>
-        ) : null}
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+          <View style={styles.profileText}>
+            <Text numberOfLines={1} style={styles.username}>{username ?? '使用者'}</Text>
+            <Text style={styles.status}>帳戶已驗證</Text>
+          </View>
+        </View>
+        {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
         {children}
-
         <Pressable
           accessibilityRole="button"
           disabled={busy}
-          onPress={authenticated ? onSignOut : onSignIn}
-          style={({ pressed }) => [styles.button, busy && styles.buttonDisabled, pressed && styles.buttonPressed]}
+          onPress={onSignOut}
+          style={({ pressed }) => [styles.secondaryButton, busy && styles.buttonDisabled, pressed && styles.buttonPressed]}
         >
-          {busy ? (
-            <ActivityIndicator color="#07111f" />
-          ) : (
-            <Text style={styles.buttonText}>{authenticated ? '登出' : '登入或註冊'}</Text>
-          )}
+          {busy ? <ActivityIndicator color="#111111" /> : <Text style={styles.primaryButtonText}>登出</Text>}
         </Pressable>
-
-        {!authenticated ? <Text style={styles.note}>不會在此頁面輸入或保存登入資料。</Text> : null}
       </View>
     </View>
   );
@@ -80,78 +140,75 @@ export function LoginShell({
 const styles = StyleSheet.create({
   page: {
     alignItems: 'center',
-    backgroundColor: '#07111f',
+    backgroundColor: '#F5F5F5',
     flex: 1,
-    justifyContent: 'center',
     minHeight: '100%',
     overflow: 'hidden',
-    padding: 24,
   },
-  glow: {
-    backgroundColor: '#13c4ad',
-    borderRadius: 999,
-    height: 360,
-    opacity: 0.16,
-    position: 'absolute',
-    right: -155,
-    top: -160,
-    transform: [{ rotate: '18deg' }],
-    width: 360,
-  },
-  card: {
-    backgroundColor: '#0d1a2c',
-    borderColor: '#1e3551',
-    borderRadius: 24,
+  onboardingFrame: { flex: 1, maxWidth: 480, overflow: 'hidden', paddingTop: 20, width: '100%' },
+  skipButton: { alignSelf: 'flex-start', borderRadius: 999, marginLeft: 24, paddingHorizontal: 12, paddingVertical: 8 },
+  skipText: { color: '#111111', fontSize: 14, fontWeight: '700' },
+  walletScene: { alignItems: 'center', height: 330, justifyContent: 'center', marginHorizontal: 24, position: 'relative' },
+  gridOrb: {
+    borderColor: '#D7D7D7',
+    borderRadius: 150,
     borderWidth: 1,
-    maxWidth: 440,
-    padding: 32,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.28,
-    shadowRadius: 34,
+    height: 300,
+    overflow: 'hidden',
+    position: 'absolute',
+    right: -96,
+    top: 8,
+    width: 300,
+  },
+  gridRing: { borderColor: '#DFDFDF', borderRadius: 112, borderWidth: 1, height: 224, left: 38, position: 'absolute', top: 38, width: 224 },
+  gridLineHorizontal: { borderColor: '#E1E1E1', borderTopWidth: 1, left: 0, position: 'absolute', top: 149, width: '100%' },
+  gridLineVertical: { borderColor: '#E1E1E1', borderLeftWidth: 1, height: '100%', left: 149, position: 'absolute', top: 0 },
+  summaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#111111',
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 22,
+    boxShadow: '0px 8px 16px rgba(17, 17, 17, 0.08)',
     width: '100%',
   },
-  brandRow: { alignItems: 'center', flexDirection: 'row', gap: 10, marginBottom: 46 },
-  mark: {
-    alignItems: 'center',
-    backgroundColor: '#13c4ad',
-    borderRadius: 10,
-    height: 30,
-    justifyContent: 'center',
-    width: 30,
+  brandRow: { alignItems: 'center', flexDirection: 'row', gap: 9 },
+  mark: { alignItems: 'center', backgroundColor: '#111111', borderRadius: 9, height: 27, justifyContent: 'center', width: 27 },
+  markDot: { backgroundColor: '#D7FF00', borderRadius: 4, height: 8, width: 8 },
+  brand: { color: '#111111', fontSize: 20, fontWeight: '800', letterSpacing: -0.6 },
+  summaryEyebrow: { color: '#737373', fontSize: 12, fontWeight: '700', letterSpacing: 1.1, marginTop: 26 },
+  summaryTitle: { color: '#111111', fontSize: 28, fontWeight: '800', letterSpacing: -1, lineHeight: 35, marginTop: 5 },
+  summaryBody: { color: '#5E5E5E', fontSize: 15, lineHeight: 22, marginTop: 5 },
+  actionRow: { flexDirection: 'row', gap: 10, marginTop: 22 },
+  actionPill: { alignItems: 'center', backgroundColor: '#D7FF00', borderRadius: 999, flex: 1, minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 },
+  actionPillText: { color: '#111111', fontSize: 15, fontWeight: '800' },
+  onboardingCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    flex: 1,
+    minHeight: 306,
+    padding: 26,
   },
-  markDot: { backgroundColor: '#07111f', borderRadius: 4, height: 8, width: 8 },
-  brand: { color: '#f4f8fb', fontSize: 21, fontWeight: '700', letterSpacing: -0.6 },
-  eyebrow: { color: '#7ce4d6', fontSize: 11, fontWeight: '700', letterSpacing: 1.6, marginBottom: 12 },
-  title: { color: '#f4f8fb', fontSize: 30, fontWeight: '700', letterSpacing: -1, lineHeight: 38 },
-  body: { color: '#aebfd2', fontSize: 16, lineHeight: 24, marginTop: 14 },
-  profile: {
-    alignItems: 'center',
-    backgroundColor: '#10243b',
-    borderColor: '#1c3858',
-    borderRadius: 14,
-    borderWidth: 1,
-    flexDirection: 'row',
-    marginTop: 26,
-    padding: 15,
-  },
-  avatar: { alignItems: 'center', backgroundColor: '#13c4ad', borderRadius: 18, height: 36, justifyContent: 'center', width: 36 },
-  avatarText: { color: '#07111f', fontSize: 15, fontWeight: '800' },
+  onboardingEyebrow: { color: '#737373', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
+  onboardingTitle: { color: '#111111', fontSize: 28, fontWeight: '800', letterSpacing: -1, lineHeight: 35, marginTop: 8 },
+  onboardingBody: { color: '#5E5E5E', fontSize: 16, lineHeight: 24, marginTop: 10 },
+  dots: { alignItems: 'center', flexDirection: 'row', gap: 7, marginTop: 20 },
+  dot: { backgroundColor: '#D6D6D6', borderRadius: 4, height: 8, width: 8 },
+  dotActive: { backgroundColor: '#111111', width: 22 },
+  primaryButton: { alignItems: 'center', backgroundColor: '#D7FF00', borderRadius: 999, justifyContent: 'center', marginTop: 20, minHeight: 54, paddingHorizontal: 20 },
+  secondaryButton: { alignItems: 'center', backgroundColor: '#D7FF00', borderRadius: 999, justifyContent: 'center', marginTop: 24, minHeight: 52, paddingHorizontal: 20 },
+  buttonDisabled: { opacity: 0.58 },
+  buttonPressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
+  primaryButtonText: { color: '#111111', fontSize: 16, fontWeight: '800' },
+  note: { color: '#737373', fontSize: 12, lineHeight: 18, marginTop: 12, textAlign: 'center' },
+  authCard: { backgroundColor: '#FFFFFF', borderColor: '#111111', borderRadius: 24, borderWidth: 1, margin: 24, maxWidth: 440, padding: 28, width: '100%' },
+  authTitle: { color: '#111111', fontSize: 28, fontWeight: '800', letterSpacing: -1, lineHeight: 35, marginTop: 5 },
+  profile: { alignItems: 'center', backgroundColor: '#F5F5F5', borderColor: '#E1E1E1', borderRadius: 16, borderWidth: 1, flexDirection: 'row', marginTop: 22, padding: 15 },
+  avatar: { alignItems: 'center', backgroundColor: '#D7FF00', borderRadius: 18, height: 36, justifyContent: 'center', width: 36 },
+  avatarText: { color: '#111111', fontSize: 15, fontWeight: '800' },
   profileText: { flex: 1, marginLeft: 12, minWidth: 0 },
-  username: { color: '#f4f8fb', fontSize: 16, fontWeight: '700' },
-  status: { color: '#7ce4d6', fontSize: 13, marginTop: 2 },
-  error: { color: '#ffb4a8', fontSize: 14, lineHeight: 20, marginTop: 20 },
-  button: {
-    alignItems: 'center',
-    backgroundColor: '#13c4ad',
-    borderRadius: 12,
-    justifyContent: 'center',
-    marginTop: 26,
-    minHeight: 52,
-    paddingHorizontal: 18,
-  },
-  buttonDisabled: { opacity: 0.65 },
-  buttonPressed: { opacity: 0.84, transform: [{ scale: 0.99 }] },
-  buttonText: { color: '#07111f', fontSize: 16, fontWeight: '800' },
-  note: { color: '#7890a9', fontSize: 13, lineHeight: 19, marginTop: 16, textAlign: 'center' },
+  username: { color: '#111111', fontSize: 16, fontWeight: '700' },
+  status: { color: '#5E5E5E', fontSize: 13, marginTop: 2 },
+  error: { color: '#B42318', fontSize: 14, lineHeight: 20, marginTop: 16 },
 });
