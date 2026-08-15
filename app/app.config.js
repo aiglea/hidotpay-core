@@ -8,7 +8,7 @@ module.exports = {
   expo: {
     name: 'hidotpay',
     slug: 'hidotpay-wallet',
-    version: '0.2.52',
+    version: '0.2.53',
     orientation: 'portrait',
     scheme: 'hidotpay',
     userInterfaceStyle: 'light',
