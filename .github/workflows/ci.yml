@@ -42,3 +42,25 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run typecheck
+
+  deploy-wallet-ui:
+    name: deploy-wallet-ui
+    needs: [app]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npx expo export --platform web --output-dir dist
+      - run: npx wrangler@4 deploy --config wrangler.wallet-ui.jsonc --message "${{ github.event.head_commit.message }}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

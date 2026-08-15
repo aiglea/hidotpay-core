@@ -4,6 +4,7 @@
 
 - 初級版錢包開放站內轉帳：登入後可複製自己的錢包編號，把 USDT 轉給另一個 hidotpay 用戶；送出前會檢查編號與金額，並使用冪等鍵呼叫受保護 API。
 - 前台仍不蒐集密碼、不保存私鑰，也不提供 P2P 或外部提領。沒有設定受保護 API 時，不會假裝轉帳成功。
+- 公開預覽 `https://hidotpay-wallet-ui.lgninhk.workers.dev` 已改為本版畫面；後續 `codex/**` 推送會由 GitHub Actions 自動部署。
 
 ## 0.2.60 — 2026-08-15
 
