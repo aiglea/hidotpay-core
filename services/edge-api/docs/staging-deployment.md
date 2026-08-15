@@ -14,6 +14,8 @@
 
 在提交過程中，把 `services/edge-api/wrangler.jsonc` 的 `ALLOWED_EGRESS_HOSTS` 換成以逗號分隔的精確主機名，不可使用 `*`。此變更必須與審核紀錄一併提交。
 
+若要讓網頁錢包呼叫 `/v1/`，同一份經審核設定還必須加入 `CORS_ALLOWED_ORIGINS`，值為以逗號分隔的完整網域，例如 `https://wallet.hidotpay.example`；不可使用 `*`，也不可填入路徑、萬用子網域或不受控網域。本機測試才可額外列出 `http://localhost:3000`。未列在白名單內的瀏覽器來源、預檢方法或請求標頭一律得到 `403`，不會喚起帳本 runtime。
+
 `WITHDRAWALS_ENABLED=false` 必須保留在設定檔，且不可在 Cloudflare Dashboard 臨時改成 true。這個開關只允許在完整 HSM、測試網與雙人覆核驗收後，透過程式碼審核調整。
 
 `LEDGER_API_ENABLED=false` 是 staging 的容器保護開關。所有 Secret、精確出站主機名、Container 映像與登入後健康檢查完成前，必須維持 `false`；登入請求會立即得到 `503`，不會啟動容器。只能與已審核的設定檔一起改為 `true`。

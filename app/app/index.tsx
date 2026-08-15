@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 export default function FallbackHomeScreen() {
   return (
     <View style={styles.page}>
-      <Text style={styles.text}>hidotpay 登入測試僅支援網頁與 Android。</Text>
+      <Text style={styles.text}>hidotpay 錢包目前支援網頁與 Android。</Text>
     </View>
   );
 }

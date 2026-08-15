@@ -34,6 +34,54 @@ test('does not construct a runtime before a bearer token and the explicit API ga
   assert.equal(runtimeCalls, 0);
 });
 
+test('strictly allowlisted web origins receive CORS preflight and response headers', async () => {
+  let authenticateCalls = 0;
+  let runtimeCalls = 0;
+  const handler = createNativeLedgerHandler({
+    authenticate: async () => {
+      authenticateCalls += 1;
+      return { id: 'actor-001' };
+    },
+    createRuntime: async () => {
+      runtimeCalls += 1;
+      return { handle: async () => Response.json({ reached_runtime: true }) };
+    },
+  });
+  const env = { ...enabledEnv, CORS_ALLOWED_ORIGINS: 'https://wallet.hidotpay.example,http://localhost:3000' };
+  const preflight = await handler(new Request('https://api.hidotpay.example/v1/me/balances', {
+    method: 'OPTIONS',
+    headers: {
+      origin: 'https://wallet.hidotpay.example',
+      'access-control-request-headers': 'authorization, content-type, idempotency-key',
+      'access-control-request-method': 'POST',
+    },
+  }), env);
+
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://wallet.hidotpay.example');
+  assert.equal(preflight.headers.get('access-control-allow-methods'), 'GET, POST');
+  assert.equal(authenticateCalls, 0);
+  assert.equal(runtimeCalls, 0);
+
+  const request = await handler(new Request('https://api.hidotpay.example/v1/me/balances', {
+    headers: { authorization: 'Bearer valid-token', origin: 'https://wallet.hidotpay.example' },
+  }), env);
+  assert.equal(request.status, 200);
+  assert.equal(request.headers.get('access-control-allow-origin'), 'https://wallet.hidotpay.example');
+
+  const rejected = await handler(new Request('https://api.hidotpay.example/v1/me/balances', {
+    headers: { authorization: 'Bearer valid-token', origin: 'https://attacker.example' },
+  }), env);
+  assert.equal(rejected.status, 403);
+  assert.equal(runtimeCalls, 1);
+
+  const malformedConfig = await handler(new Request('https://api.hidotpay.example/v1/me/balances', {
+    method: 'OPTIONS',
+    headers: { origin: 'https://wallet.hidotpay.example', 'access-control-request-method': 'GET' },
+  }), { ...enabledEnv, CORS_ALLOWED_ORIGINS: 'https://wallet.hidotpay.example/not-an-origin' });
+  assert.equal(malformedConfig.status, 403);
+});
+
 test('passes the Worker binding to the runtime only after authorization and the API gate', async () => {
   let receivedEnv;
   const handler = createNativeLedgerHandler({

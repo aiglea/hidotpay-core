@@ -64,6 +64,8 @@ describe('financial edge worker project', () => {
     assert.match(guide, /OPENBAO_TRANSIT_TOKEN/);
     assert.match(guide, /26257/);
     assert.match(guide, /不得為了直連資料庫改回 enableInternet=true/);
+    assert.match(guide, /CORS_ALLOWED_ORIGINS/);
+    assert.match(guide, /不可使用 `\*`/);
   });
 
   it('keeps the native Worker runtime unreachable before authentication and the explicit API gate', async () => {
@@ -72,8 +74,10 @@ describe('financial edge worker project', () => {
     assert.match(worker, /pathname\.startsWith\('\/v1\/'\)/);
     assert.match(worker, /request\.headers\.get\('authorization'\)/);
     assert.match(worker, /LEDGER_API_ENABLED !== 'true'/);
-    assert.match(worker, /return await \(await options\.createRuntime\(env\)\)\.handle\(request, actor\)/);
-    assert.match(worker, /catch \(error\) \{\s+const response = nativeErrorResponse\(error\);\s+if \(response\) return response;\s+return new Response\('Service Unavailable', \{ status: 503 \}\)/);
+    assert.match(worker, /corsPreflightResponse/);
+    assert.match(worker, /corsHeaders === null/);
+    assert.match(worker, /return respond\(await \(await options\.createRuntime\(env\)\)\.handle\(request, actor\)\)/);
+    assert.match(worker, /if \(response\) return respond\(response\)/);
   });
 
   it('binds Hyperdrive only to the isolated native staging Worker and keeps money gates closed', async () => {

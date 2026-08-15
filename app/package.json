@@ -1,6 +1,6 @@
 {
-  "name": "hidotpay-login-test",
-  "version": "0.1.1",
+  "name": "hidotpay-wallet",
+  "version": "0.2.52",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -8,7 +8,7 @@
     "web": "expo start --web --port 3000",
     "android": "expo start --android",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/project-contract.test.mjs"
+    "test": "node --no-warnings --test tests/*.test.mjs"
   },
   "dependencies": {
     "@logto/react": "latest",

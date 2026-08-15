@@ -31,6 +31,31 @@ test('web logout uses a dedicated post-sign-out redirect URI', () => {
   assert.match(read('app/index.web.tsx'), /signOut\(webPostLogoutRedirectUri\)/);
 });
 
+test('已登入使用者會進入錢包首頁，而非停留在登入測試殼', () => {
+  assert.match(read('app/index.web.tsx'), /<WalletHome/);
+  assert.match(read('app/index.native.tsx'), /<WalletHome/);
+  assert.match(read('src/WalletHome.tsx'), /充值地址/);
+  assert.match(read('src/WalletHome.tsx'), /站內轉帳/);
+});
+
+test('錢包服務網址是公開設定，不能是 App 內嵌密鑰', () => {
+  assert.match(read('app.config.js'), /EXPO_PUBLIC_LEDGER_API_BASE_URL/);
+  assert.match(read('.env.example'), /EXPO_PUBLIC_LEDGER_API_BASE_URL/);
+});
+
+test('錢包首頁在桌面與窄螢幕可捲動，不會截斷轉帳表單', () => {
+  const walletHome = read('src/WalletHome.tsx');
+  assert.match(walletHome, /<ScrollView[^>]+style=\{styles\.scrollView\}/);
+  assert.match(walletHome, /scrollView: \{ flex: 1 \}/);
+});
+
+test('轉帳遇到網路錯誤會保留同一個冪等鍵，避免重按造成重複扣款', () => {
+  const walletHome = read('src/WalletHome.tsx');
+  assert.match(walletHome, /const transferIdempotencyKey = useRef<string \| undefined>\(undefined\)/);
+  assert.match(walletHome, /transferIdempotencyKey\.current = idempotencyKey/);
+  assert.match(walletHome, /idempotencyKey,/);
+});
+
 test('release version is incremented and consistent across app metadata', () => {
   const packageVersion = JSON.parse(read('package.json')).version;
   const packageLockVersion = JSON.parse(read('package-lock.json')).version;

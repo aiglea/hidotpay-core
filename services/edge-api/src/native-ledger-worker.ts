@@ -1,3 +1,4 @@
+import { corsHeadersForRequest, corsPreflightResponse, withCors } from './cors.js';
 import { nativeErrorResponse } from './native-response.js';
 
 export type NativeLedgerRuntime<Actor = unknown> = {
@@ -5,6 +6,7 @@ export type NativeLedgerRuntime<Actor = unknown> = {
 };
 
 export type NativeLedgerWorkerEnv = {
+  CORS_ALLOWED_ORIGINS?: string;
   LEDGER_API_ENABLED: string;
 };
 
@@ -18,16 +20,20 @@ export function createNativeLedgerHandler<Env extends NativeLedgerWorkerEnv, Act
     const { pathname } = new URL(request.url);
     if (pathname === '/healthz') return Response.json({ status: 'ok' });
     if (!pathname.startsWith('/v1/')) return new Response('Not Found', { status: 404 });
-    if (!request.headers.get('authorization')) return new Response('Unauthorized', { status: 401 });
-    if (env.LEDGER_API_ENABLED !== 'true') return new Response('Service Unavailable', { status: 503 });
+    const corsHeaders = corsHeadersForRequest(request, env);
+    if (request.method === 'OPTIONS') return corsPreflightResponse(request, corsHeaders);
+    if (corsHeaders === null) return new Response('Forbidden', { status: 403 });
+    const respond = (response: Response) => withCors(response, corsHeaders);
+    if (!request.headers.get('authorization')) return respond(new Response('Unauthorized', { status: 401 }));
+    if (env.LEDGER_API_ENABLED !== 'true') return respond(new Response('Service Unavailable', { status: 503 }));
 
     try {
       const actor = await options.authenticate(env, request.headers);
-      return await (await options.createRuntime(env)).handle(request, actor);
+      return respond(await (await options.createRuntime(env)).handle(request, actor));
     } catch (error) {
       const response = nativeErrorResponse(error);
-      if (response) return response;
-      return new Response('Service Unavailable', { status: 503 });
+      if (response) return respond(response);
+      return respond(new Response('Service Unavailable', { status: 503 }));
     }
   };
 }

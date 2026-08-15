@@ -2,9 +2,11 @@ import { useLogto } from '@logto/rn';
 import { useEffect, useState } from 'react';
 
 import { LoginShell } from '../src/LoginShell';
+import { WalletHome } from '../src/WalletHome';
+import { ledgerApiBaseUrl, ledgerApiResource } from '../src/auth-config';
 
 export default function NativeHomeScreen() {
-  const { getIdTokenClaims, isAuthenticated, isInitialized, signIn, signOut } = useLogto();
+  const { getAccessToken, getIdTokenClaims, isAuthenticated, isInitialized, signIn, signOut } = useLogto();
   const [username, setUsername] = useState<string>();
   const [actionError, setActionError] = useState<string>();
 
@@ -33,9 +35,23 @@ export default function NativeHomeScreen() {
     });
   };
 
+  if (isAuthenticated) {
+    return (
+      <WalletHome
+        apiBaseUrl={ledgerApiBaseUrl && ledgerApiResource ? ledgerApiBaseUrl : ''}
+        getAccessToken={() => {
+          if (!ledgerApiResource) return Promise.reject(new Error('錢包服務尚未完成 API 權限設定。'));
+          return getAccessToken(ledgerApiResource);
+        }}
+        onSignOut={beginSignOut}
+        username={username}
+      />
+    );
+  }
+
   return (
     <LoginShell
-      authenticated={isAuthenticated}
+      authenticated={false}
       busy={!isInitialized}
       error={actionError}
       onSignIn={beginSignIn}
