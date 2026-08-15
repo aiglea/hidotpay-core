@@ -29,3 +29,13 @@ npm run build
 整合測試只認 `HIDOTPAY_TEST_DATABASE_URL`，不會讀取 `DATABASE_URL`。這是刻意設計，避免測試資料誤寫到正式帳本。
 
 在 CockroachDB Cloud 的 SQL 介面先執行一次 `CREATE DATABASE hidotpay_test;`，再從 Connect 介面取得該資料庫的專用連線字串。測試帳號的權限必須只限於這個測試資料庫。
+
+測試帳號除了資料庫權限外，還必須取得既有及未來金融資料表的權限。請由建立 migration 的資料庫帳號，對**只指向 `hidotpay_test`** 的連線執行一次：
+
+```sh
+HIDOTPAY_TEST_DATABASE_URL='只指向 hidotpay_test 的管理連線字串' \
+HIDOTPAY_TEST_RUNNER_ROLE='hidotpay_test_runner' \
+npm run db:grant-test-runner --workspace=@hidotpay/ledger-api
+```
+
+這個指令會拒絕非 `hidotpay_test` 的資料庫，並只在這個測試資料庫授予測試帳號建立資料庫物件所需的 `CREATE`／`USAGE` 權限，以及既有資料表、序列和由 `hidotpay` migration 帳號日後建立的資料表／序列權限。它不讀取或改動正式資料庫。
