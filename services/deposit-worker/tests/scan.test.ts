@@ -12,6 +12,8 @@ class FixtureAdapter implements ChainAdapter {
   public reorged = false;
   public calls: string[] = [];
   public queries: TransferQuery[] = [];
+  public transferOverride: ChainTransfer[] | undefined;
+  public transfersByAddress = new Map<string, ChainTransfer[]>();
 
   public async getHead(): Promise<number> {
     this.calls.push('getHead');
@@ -23,6 +25,9 @@ class FixtureAdapter implements ChainAdapter {
   }
   public async listTokenTransfers(query: TransferQuery): Promise<ChainTransfer[]> {
     this.queries.push(query);
+    const configured = this.transfersByAddress.get(query.watchedAddresses[0] ?? '');
+    if (configured) return configured;
+    if (this.transferOverride) return this.transferOverride;
     return query.fromBlock <= 8 && query.toBlock >= 8
       ? [{ amountAtoms: '1000000', blockHash: 'canonical-8', blockHeight: 8, contractIdentifier: 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj', destinationAddress: 'T111111111111111111111111111111111', eventIndex: 0, network: this.network, transactionHash: 'tx-001' }]
       : [];
@@ -115,6 +120,85 @@ test('scanner only scans through the safe head and never advances its cursor int
   const afterRestart = await scanner.scan([target], 7);
   assert.deepEqual(afterRestart, { candidates: 0, fromBlock: 9, head: 10, reorgRecovered: false });
   assert.equal(store.observations().length, 1);
+});
+
+test('scanner fails closed when an adapter returns an event outside the requested safe range', async () => {
+  const adapter = new FixtureAdapter();
+  adapter.head = 50;
+  adapter.transferOverride = [
+    {
+      amountAtoms: '1000000',
+      blockHash: 'canonical-7',
+      blockHeight: 7,
+      contractIdentifier: 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj',
+      destinationAddress: 'T111111111111111111111111111111111',
+      eventIndex: 0,
+      network: adapter.network,
+      transactionHash: 'tx-in-safe-range',
+    },
+    {
+      amountAtoms: '1000000',
+      blockHash: 'canonical-30',
+      blockHeight: 30,
+      contractIdentifier: 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj',
+      destinationAddress: 'T111111111111111111111111111111111',
+      eventIndex: 1,
+      network: adapter.network,
+      transactionHash: 'tx-outside-safe-range',
+    },
+  ];
+  const store = new InMemoryDepositScanStore();
+  const credited: string[] = [];
+  const scanner = new DepositScanner(adapter, store, policy, { reorgWindow: 32 }, {
+    async credit(observation) { credited.push(observation.transactionHash); },
+  });
+  const target = { accountId: 'account-1', address: 'T111111111111111111111111111111111', assetCode: 'USDT' };
+
+  await assert.rejects(() => scanner.scan([target], 7), /chain_transfer_outside_requested_range/);
+
+  assert.deepEqual(adapter.queries, [{ contractIdentifier: 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj', fromBlock: 7, toBlock: 18, watchedAddresses: [target.address] }]);
+  assert.deepEqual(credited, []);
+  assert.deepEqual(store.observations(), []);
+  assert.equal(await store.cursor(adapter.network), undefined);
+});
+
+test('scanner performs no writes when a later target returns an event outside the requested safe range', async () => {
+  const adapter = new FixtureAdapter();
+  adapter.head = 50;
+  const firstTarget = { accountId: 'account-1', address: 'T111111111111111111111111111111111', assetCode: 'USDT' };
+  const secondTarget = { accountId: 'account-2', address: 'T222222222222222222222222222222222', assetCode: 'USDT' };
+  adapter.transfersByAddress.set(firstTarget.address, [{
+    amountAtoms: '1000000',
+    blockHash: 'canonical-7',
+    blockHeight: 7,
+    contractIdentifier: 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj',
+    destinationAddress: firstTarget.address,
+    eventIndex: 0,
+    network: adapter.network,
+    transactionHash: 'tx-first-target',
+  }]);
+  adapter.transfersByAddress.set(secondTarget.address, [{
+    amountAtoms: '1000000',
+    blockHash: 'canonical-30',
+    blockHeight: 30,
+    contractIdentifier: 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj',
+    destinationAddress: secondTarget.address,
+    eventIndex: 0,
+    network: adapter.network,
+    transactionHash: 'tx-second-target-outside-safe-range',
+  }]);
+  const store = new InMemoryDepositScanStore();
+  const credited: string[] = [];
+  const scanner = new DepositScanner(adapter, store, policy, { reorgWindow: 32 }, {
+    async credit(observation) { credited.push(observation.transactionHash); },
+  });
+
+  await assert.rejects(() => scanner.scan([firstTarget, secondTarget], 7), /chain_transfer_outside_requested_range/);
+
+  assert.equal(adapter.queries.length, 2);
+  assert.deepEqual(credited, []);
+  assert.deepEqual(store.observations(), []);
+  assert.equal(await store.cursor(adapter.network), undefined);
 });
 
 test('scanner credits a finalized observation once and does not re-credit it after restart', async () => {

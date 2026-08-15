@@ -69,7 +69,7 @@ export class DepositScanner {
     if (fromBlock > safeHead) return { candidates: 0, fromBlock, head, reorgRecovered: false };
     const toBlock = Math.min(safeHead, fromBlock + (this.config.maxBlockRange ?? Number.MAX_SAFE_INTEGER) - 1);
 
-    let candidates = 0;
+    const queriedTargets: Array<{ events: ChainTransfer[]; policy: { contractIdentifier: string }; target: DepositTarget }> = [];
     for (const target of targets) {
       const policy = this.policy.get(this.adapter.network, target.assetCode);
       const events = await this.adapter.listTokenTransfers({
@@ -78,6 +78,16 @@ export class DepositScanner {
         toBlock,
         watchedAddresses: [target.address],
       });
+      for (const event of events) {
+        if (!Number.isSafeInteger(event.blockHeight) || event.blockHeight < fromBlock || event.blockHeight > toBlock) {
+          throw new Error('chain_transfer_outside_requested_range');
+        }
+      }
+      queriedTargets.push({ events, policy, target });
+    }
+
+    let candidates = 0;
+    for (const { events, policy, target } of queriedTargets) {
       for (const event of events) {
         if (event.network !== this.adapter.network || event.destinationAddress !== target.address || event.contractIdentifier !== policy.contractIdentifier) continue;
         const confirmationCount = head - event.blockHeight + 1;

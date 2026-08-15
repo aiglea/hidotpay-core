@@ -38,7 +38,7 @@ safe_head = head - reorg_window
 2. 如果 `safeHead < firstBlock`，回傳零候選，且不建立游標。
 3. 若已有游標，先確認 `adapter.getBlockHash(cursor.height) === cursor.blockHash`。不相同即拋出 `deep_chain_reorg_detected`；不能清除、回退或改寫任何資料。
 4. 從 `cursor.height + 1`（或 `firstBlock`）掃到 `min(safeHead, fromBlock + maxBlockRange - 1)`。
-5. 每個事件必須同時符合官方資產／合約、目的地址、資產最小確認數和安全水位。成功後才以既有冪等 `network + transaction_hash + event_index` 呼叫 Ledger 入帳並標示 `credited`。
+5. 每個事件的 `blockHeight` 必須是安全整數並位於本輪 RPC 請求的 `[fromBlock, toBlock]`；任何超界或格式錯誤都是供應商協議違反，掃描必須失敗關閉，不能保存游標或入帳。通過此邊界後，事件仍必須同時符合官方資產／合約、目的地址、資產最小確認數和安全水位。成功後才以既有冪等 `network + transaction_hash + event_index` 呼叫 Ledger 入帳並標示 `credited`。
 6. 只有整個區間成功處理後，才把游標保存到該區間末端的區塊雜湊。
 
 ### 觀測重放
@@ -61,9 +61,10 @@ safe_head = head - reorg_window
 1. 視窗內重組：候選事件尚未入帳，重新掃描新正史時只入帳一次。
 2. 安全水位：距鏈頭少於或等於 `reorgWindow` 的事件不會呼叫 creditor，也不會前進游標到不安全區塊。
 3. 深度重組：游標雜湊不符會停機；store、游標、credited 觀測與 creditor 呼叫次數均不變。
-4. 舊 orphaned + receipt：啟動前被拒絕，且不會查詢／入帳新事件。
-5. PostgreSQL 專用 `/hidotpay_test` 整合驗證：測試候選重放、既有 receipt 防護和游標資料完整性；沒有專用網址時安全跳過。
-6. 回歸驗證：多鏈掃描、資產 allowlist、充值冪等、帳本平衡、Blnk 對帳與現有測試均不退化。
+4. RPC 範圍違反：若要求 `[7, 18]` 卻收到高度 `30` 的事件，必須停止該輪，且不得觀測、入帳或保存游標。
+5. 舊 orphaned + receipt：啟動前被拒絕，且不會查詢／入帳新事件。
+6. PostgreSQL 專用 `/hidotpay_test` 整合驗證：測試候選重放、既有 receipt 防護和游標資料完整性；沒有專用網址時安全跳過。
+7. 回歸驗證：多鏈掃描、資產 allowlist、充值冪等、帳本平衡、Blnk 對帳與現有測試均不退化。
 
 ## 正式營運條件
 
