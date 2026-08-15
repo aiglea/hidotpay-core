@@ -27,7 +27,8 @@ test('web callback returns to the application home after Logto completes', () =>
 });
 
 test('web logout uses a dedicated post-sign-out redirect URI', () => {
-  assert.match(read('src/auth-config.ts'), /webPostLogoutRedirectUri = 'http:\/\/localhost:3000'/);
+  assert.match(read('src/auth-config.ts'), /webAuthRedirectUris/);
+  assert.match(read('src/web-auth-redirect.ts'), /parsed\.protocol === 'https:'/);
   assert.match(read('app/index.web.tsx'), /signOut\(webPostLogoutRedirectUri\)/);
 });
 

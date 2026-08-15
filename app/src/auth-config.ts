@@ -1,5 +1,7 @@
 import Constants from 'expo-constants';
 
+import { webAuthRedirectUris } from './web-auth-redirect';
+
 type LogtoExtra = {
   ledgerApiBaseUrl?: string;
   ledgerApiResource?: string;
@@ -15,6 +17,7 @@ export const logtoWebAppId = extra.logtoWebAppId ?? 'tlc4kgyfsukbz60exkmun';
 export const logtoNativeAppId = extra.logtoNativeAppId ?? 'jmefg2ses94nuvrkrc07i';
 export const ledgerApiBaseUrl = extra.ledgerApiBaseUrl ?? '';
 export const ledgerApiResource = extra.ledgerApiResource ?? '';
-export const webRedirectUri = 'http://localhost:3000/callback';
-export const webPostLogoutRedirectUri = 'http://localhost:3000';
+const webAuthUris = webAuthRedirectUris(typeof window === 'undefined' ? undefined : window.location.origin);
+export const webRedirectUri = webAuthUris.redirectUri;
+export const webPostLogoutRedirectUri = webAuthUris.postLogoutRedirectUri;
 export const nativeRedirectUri = 'hidotpay://callback';
