@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 type LoginShellProps = {
   authenticated: boolean;
@@ -23,7 +23,7 @@ export function LoginShell({
   if (!authenticated) {
     return (
       <View style={styles.page}>
-        <View style={styles.onboardingFrame}>
+        <ScrollView contentContainerStyle={styles.onboardingFrame} showsVerticalScrollIndicator={false} style={styles.onboardingScroll}>
           <Pressable
             accessibilityLabel="略過引導並登入"
             accessibilityRole="button"
@@ -97,7 +97,7 @@ export function LoginShell({
             </Pressable>
             <Text style={styles.note}>登入會在 hidotpay 的安全帳戶頁面完成。</Text>
           </View>
-        </View>
+        </ScrollView>
       </View>
     );
   }
@@ -145,7 +145,8 @@ const styles = StyleSheet.create({
     minHeight: '100%',
     overflow: 'hidden',
   },
-  onboardingFrame: { flex: 1, maxWidth: 480, overflow: 'hidden', paddingTop: 20, width: '100%' },
+  onboardingScroll: { flex: 1, width: '100%' },
+  onboardingFrame: { alignSelf: 'center', flexGrow: 1, maxWidth: 480, overflow: 'hidden', paddingTop: 20, width: '100%' },
   skipButton: { alignSelf: 'flex-start', borderRadius: 999, marginLeft: 24, paddingHorizontal: 12, paddingVertical: 8 },
   skipText: { color: '#111111', fontSize: 14, fontWeight: '700' },
   walletScene: { alignItems: 'center', height: 330, justifyContent: 'center', marginHorizontal: 24, position: 'relative' },

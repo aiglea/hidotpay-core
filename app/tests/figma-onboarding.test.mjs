@@ -31,6 +31,9 @@ test('未登入首頁符合 Figma 引導版型且不顯示假餘額', () => {
   assert.doesNotMatch(source, /\$12,765\.00/);
   assert.match(source, /onPress=\{onSignIn\}/);
   assert.match(source, /disabled=\{busy\}/);
+  assert.match(source, /ScrollView/);
+  assert.match(source, /<ScrollView[^>]+style=\{styles\.onboardingScroll\}/);
+  assert.match(source, /onboardingScroll: \{[^}]*flex: 1/);
 });
 
 test('Cloudflare 錢包 UI 只部署 SPA 靜態資產', () => {
