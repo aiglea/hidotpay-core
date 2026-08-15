@@ -32,6 +32,14 @@ grep -q 'hidotpay-p2p-payment-expiry' "$(dirname "$0")/base/p2p-payment-expiry.y
 test -s "$(dirname "$0")/../../services/ledger-api/Dockerfile"
 test -s "$(dirname "$0")/../../services/outbox-publisher/Dockerfile"
 test -s "$(dirname "$0")/../../services/deposit-worker/Dockerfile"
+test -s "$(dirname "$0")/../../services/admin-read-model-worker/Dockerfile"
+test -s "$(dirname "$0")/base/admin-read-model-worker.yaml"
+grep -q 'kind: CronJob' "$(dirname "$0")/base/admin-read-model-worker.yaml"
+grep -q 'concurrencyPolicy: Forbid' "$(dirname "$0")/base/admin-read-model-worker.yaml"
+grep -q 'hidotpay-admin-read-model-worker' "$(dirname "$0")/base/admin-read-model-worker.yaml"
+grep -q 'readOnlyRootFilesystem: true' "$(dirname "$0")/base/admin-read-model-worker.yaml"
+grep -q 'hidotpay-admin-read-model-worker-ca' "$(dirname "$0")/base/admin-read-model-worker.yaml"
+grep -q 'mountPath: /var/run/hidotpay/cockroach-ca' "$(dirname "$0")/base/admin-read-model-worker.yaml"
 if grep -R -Eiq 'private.?key|mnemonic|seed|root.?token' "$(dirname "$0")/base"; then
   echo "Kubernetes manifests contain prohibited custody material" >&2
   exit 1

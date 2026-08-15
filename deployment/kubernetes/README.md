@@ -13,5 +13,6 @@
 6. 由密鑰服務建立 `hidotpay-reconciliation-worker` Secret，僅注入 `DATABASE_URL`、`BLNK_URL`、`BLNK_KEY`、`TEMPORAL_ADDRESS`、`TEMPORAL_NAMESPACE`、`RECONCILIATION_TEMPORAL_TASK_QUEUE`。reconciliation worker 會由 Pod 名稱取得唯一租約身分；公開 API、NocoBase 和瀏覽器不可加入此 Secret。
 7. 由密鑰服務建立 `hidotpay-p2p-payment-expiry` Secret，僅注入最小權限 `DATABASE_URL` 和 `P2P_EXPIRY_BATCH_SIZE`。此 CronJob 每分鐘執行一次且禁止重疊，僅能連 CockroachDB；不可加入 Logto、Blnk、簽名器或瀏覽器憑證。
 8. 在三個可用區建立 node group，確認節點具有 `topology.kubernetes.io/zone`；manifest 已要求同一服務跨區分散。設定監控與告警後才可實際套用。
+9. 由密鑰服務建立 `hidotpay-admin-read-model-worker` Secret，僅注入 `ADMIN_READ_MODEL_SOURCE_DATABASE_URL`、`NOCOBASE_URL`、`NOCOBASE_API_TOKEN`；另建立 `hidotpay-admin-read-model-worker-ca` Secret，僅含 CockroachDB CA 檔 `root.crt`，以唯讀方式掛載在 `/var/run/hidotpay/cockroach-ca`。正式連線字串必須使用該容器路徑，且 `NOCOBASE_URL` 必須是私有 HTTPS 位址；不可加入帳本寫入帳號、NocoBase 管理者密碼、私鑰或簽名器憑證。
 
 本目錄不含雲端憑證、私鑰或資料庫密碼。執行 `sh deployment/kubernetes/smoke-test.sh` 可驗證 manifest 結構與敏感字串防線。

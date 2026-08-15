@@ -35,6 +35,7 @@ admin-read-model-worker（無狀態、可重跑）
   └─ 延遲與失敗 metrics
        ▼
 NocoBase PostgreSQL（可丟棄投影）
+  ├─ projection_status
   ├─ admin_wallet_addresses
   ├─ admin_deposit_receipts
   ├─ admin_withdrawal_requests
@@ -51,7 +52,7 @@ P2P 相關集合只在帳本資料庫已安全套用 P2P migration 且出現對�
 - 每一筆投影紀錄以來源 UUID 作為固定 `source_id`；重跑必須更新同一筆資料，不可累積重複紀錄。
 - 投影欄位採固定白名單。不得投影私鑰、助記詞、簽名請求、OpenBao 密文、完整付款帳號或內部服務 Token。
 - 投影帳號只可讀取 NocoBase 所需的 `admin_*` 檢視表。投影工作者不得取得 CockroachDB 資料表寫入權限。
-- NocoBase 的「財務檢視者」角色只允許清單、篩選、匯出與查看；沒有新增、編輯、刪除、資料來源管理、外掛管理或自訂 HTTP 動作權限。
+- NocoBase 的「財務檢視者」角色只允許清單、篩選、匯出與查看；沒有新增、編輯、刪除、資料來源管理、外掛管理或自訂 HTTP 動作權限。投影服務角色則只可在六個 `hidotpay_admin_*` 集合執行依來源鍵更新／新增，不能讀取集合或管理 API 金鑰。
 - 提款的「核准」日後仍只能經過 Logto 角色、雙人覆核、風險檢查與獨立簽名服務；不會由低代碼後台直接發出。
 
 ## 可靠性與可觀測性

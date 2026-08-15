@@ -1,5 +1,5 @@
 {
-  "name": "@hidotpay/signer",
+  "name": "@hidotpay/admin-read-model-worker",
   "version": "0.2.51",
   "private": true,
   "type": "module",
@@ -7,12 +7,17 @@
     "node": ">=22"
   },
   "scripts": {
+    "run-once": "node --env-file-if-exists=.env dist/cli/run-once.js",
     "build": "tsc -p tsconfig.json",
     "test": "node --import tsx --test tests/**/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
+  "dependencies": {
+    "pg": "^8.16.3"
+  },
   "devDependencies": {
     "@types/node": "^24.10.0",
+    "@types/pg": "^8.15.5",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }

@@ -6,3 +6,4 @@ resources:
   - outbox-publisher.yaml
   - deposit-worker.yaml
   - p2p-payment-expiry.yaml
+  - admin-read-model-worker.yaml

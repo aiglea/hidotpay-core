@@ -1,7 +1,7 @@
 # 第一階段完成度與正式上線缺口
 
 更新日期：2026-08-15
-適用版本：0.2.49 起
+適用版本：0.2.51 起
 
 這份表把「程式已完成並驗證」和「外部環境已正式驗收」分開。任何標示為外部驗收未完成的項目，都表示不能開啟真實資產充值或提現。
 
@@ -17,7 +17,7 @@
 | 提現保護規則 | 預設拒絕提現；手續費報價、白名單冷卻、日限額、單筆限額與凍結規則已受測試覆蓋 | `services/ledger-api/tests/services/risk-service.test.ts`、`services/withdrawal-worker/tests/withdrawal-execution.test.ts` |
 | P2P 託管 | 廣告、下單、鎖定、買家付款、賣家放幣、逾時退款、爭議仲裁和付款資訊遮罩均有角色與帳本測試 | `services/ledger-api/tests/http/p2p-orders.test.ts`、`services/ledger-api/tests/integration/p2p-order-repository.test.ts` |
 | 可靠事件與工作流 | Outbox、Redpanda publisher、Temporal 工作流與 Blnk 對帳的重試／去重行為已測試 | `services/outbox-publisher/tests/*.test.ts`、`services/workflows/tests/*.test.ts`、`services/reconciliation-worker/tests/*.test.ts` |
-| 低代碼後台資料邊界 | NocoBase 只可讀 `admin_*` 檢視表；授權清單不包含私鑰、助記詞、簽名器參照或直接寫入權 | `deployment/nocobase/finance-reader-grants.sql`、`services/ledger-api/tests/admin-read-views.test.ts` |
+| 低代碼後台唯讀投影 | 投影工作者只能讀指定 `admin_*` 檢視表並寫入可重建後台資料；實測投影服務不能讀取資料或使用者，財務檢視者不能寫入 | `services/admin-read-model-worker/tests/*.test.ts`、`deployment/nocobase/read-model-role.test.mjs`、`deployment/nocobase/smoke-read-model.sh` |
 | CockroachDB 遷移安全 | 空白資料庫已完成 17 個 migration；線上欄位回填採逐條執行且可安全重跑；專用測試帳號獲得既有和日後 migration 資料表權限 | `services/ledger-api/tests/migration-runner.test.ts`、`services/ledger-api/tests/migrations.test.ts`、`services/ledger-api/tests/test-database-privileges.test.ts` |
 
 ## 已部署、但仍是封閉候選環境的項目
@@ -26,7 +26,7 @@
 | --- | --- | --- |
 | Cloudflare Worker | `hidotpay-native-ledger-staging` 已部署，健康檢查正常，未登入請求會被拒絕 | `LEDGER_API_ENABLED=false`、`WITHDRAWALS_ENABLED=false`；它只驗證邊緣入口，不會持有或簽名私鑰 |
 | CockroachDB Cloud | 已有隔離測試資料庫並完成真實整合測試 | 尚未取得多區域正式集群、獨立最小權限帳號、備份與還原演練證據 |
-| NocoBase | 本機 Compose 與唯讀資料來源規則已準備 | 尚未在私有正式網路完成實際資料來源、角色、VPN／身分閘道與管理者驗收 |
+| NocoBase | 本機 Compose、可重跑投影集合、受限投影服務角色與財務檢視者角色均已實測 | 尚未在私有正式網路完成 HTTPS、VPN／身分閘道、雲端密鑰服務、備份還原與實際管理者驗收 |
 | Blnk | 本機私有部署與受限服務金鑰流程已準備 | 尚未有多副本、私有網路、備份還原與 CockroachDB 實際抽樣對帳證據 |
 
 ## 正式上線仍缺少的外部驗收
@@ -43,7 +43,7 @@
 ### P1：與 P0 並行完成
 
 1. **事件與工作流高可用**：Redpanda 三 broker 跨可用區、TLS/SASL/ACL、複寫因子 3；Temporal Cloud 或官方 HA 部署，並實測 broker／worker 故障下的重送與人工復原。
-2. **管理後台正式化**：在私有網路啟動 NocoBase，建立唯讀 CockroachDB 資料來源與「財務檢視者」角色，實測不能修改資料、不能建立新資料來源、不能看到任何密鑰欄位。
+2. **管理後台正式化**：在私有網路啟動 NocoBase，注入受限投影服務的 CockroachDB 唯讀帳號、CA 與 API 金鑰，完成 HTTPS、備份還原與財務管理者實測；不得改用 NocoBase 直接連線或寫入帳本。
 3. **監控與事故演練**：為帳本不平衡、對帳差異、未確認提現、重複交易雜湊、outbox 堆積、工作流失敗、備份失敗與簽名拒絕建立告警；至少完成一次可用區故障及一次完整還原演練。
 
 ### P2：使用者產品完成度
@@ -54,7 +54,7 @@
 
 ## 下一個可交付任務
 
-先完成 **P1.2 管理後台正式化的可重現部署與角色驗收**：它不需要開啟資金開關，卻能讓財務人員安全看見地址、充值、提現、P2P、風控與帳本資料。完成後才進行錢包 App 的 Figma 對照實作；兩者都不會碰觸私鑰或開啟主網提現。
+下一個可交付項目是 **P2 錢包 App 的 Figma 對照實作**；同時保留 P1.2 的私有正式網路、HTTPS、備份還原與管理者驗收作為資金上線前門檻。兩者都不會碰觸私鑰或開啟主網提現。
 
 ## 發布前最小證據清單
 
