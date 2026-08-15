@@ -14,6 +14,20 @@ export type WalletApiInput = {
   fetchImpl?: typeof fetch;
 };
 
+export type WalletTransaction = {
+  id: string;
+  type: string;
+  assetCode: string;
+  amountAtoms: string;
+  direction: string;
+  createdAt: string;
+};
+
+export type WalletTransactionPage = {
+  transactions: WalletTransaction[];
+  nextCursor?: string;
+};
+
 export type DepositAddress = {
   address: string;
   keyVersion: string;
@@ -67,6 +81,34 @@ export async function getWalletSnapshot(input: WalletApiInput): Promise<WalletSn
   return {
     accountId: response.account_id,
     balances: response.balances.map((balance) => ({ assetCode: balance.asset_code, balanceAtoms: balance.balance_atoms })),
+  };
+}
+
+export async function getWalletTransactions(input: WalletApiInput & { cursor?: string }): Promise<WalletTransactionPage> {
+  const query = new URLSearchParams({ limit: '20' });
+  if (input.cursor) query.set('cursor', input.cursor);
+  const response = await requestJson<{
+    next_cursor: string | null;
+    transactions: Array<{
+      amount_atoms: string;
+      asset_code: string;
+      created_at: string;
+      direction: string;
+      id: string;
+      type: string;
+    }>;
+  }>(input, `/v1/me/transactions?${query.toString()}`, {}, '未能讀取交易紀錄，請稍後再試。');
+
+  return {
+    nextCursor: response.next_cursor ?? undefined,
+    transactions: response.transactions.map((transaction) => ({
+      id: transaction.id,
+      type: transaction.type,
+      assetCode: transaction.asset_code,
+      amountAtoms: transaction.amount_atoms,
+      direction: transaction.direction,
+      createdAt: transaction.created_at,
+    })),
   };
 }
 

@@ -47,6 +47,7 @@ test('錢包首頁在桌面與窄螢幕可捲動，不會截斷轉帳表單', ()
   const walletHome = read('src/WalletHome.tsx');
   assert.match(walletHome, /<ScrollView[^>]+style=\{styles\.scrollView\}/);
   assert.match(walletHome, /scrollView: \{ flex: 1 \}/);
+  assert.match(walletHome, /page: \{[^}]*overflow: 'hidden'/);
 });
 
 test('轉帳遇到網路錯誤會保留同一個冪等鍵，避免重按造成重複扣款', () => {
@@ -54,6 +55,18 @@ test('轉帳遇到網路錯誤會保留同一個冪等鍵，避免重按造成�
   assert.match(walletHome, /const transferIdempotencyKey = useRef<string \| undefined>\(undefined\)/);
   assert.match(walletHome, /transferIdempotencyKey\.current = idempotencyKey/);
   assert.match(walletHome, /idempotencyKey,/);
+});
+
+test('交易紀錄只顯示安全欄位，並涵蓋載入、空白、失敗重試與下一頁狀態', () => {
+  const walletHome = read('src/WalletHome.tsx');
+  assert.match(walletHome, /getWalletTransactions/);
+  assert.match(walletHome, /交易紀錄載入中/);
+  assert.match(walletHome, /尚無交易紀錄/);
+  assert.match(walletHome, /重新載入/);
+  assert.match(walletHome, /載入更多/);
+  assert.match(walletHome, /nextCursor/);
+  assert.match(walletHome, /其他交易/);
+  assert.doesNotMatch(walletHome, /counterparty|payout|chain[_-]?(tx|hash|address)/i);
 });
 
 test('release version is incremented and consistent across app metadata', () => {

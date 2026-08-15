@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { allocateDepositAddress, getWalletSnapshot, submitInternalTransfer, type DepositAddress, type WalletSnapshot } from './wallet-api';
+import { allocateDepositAddress, getWalletSnapshot, getWalletTransactions, submitInternalTransfer, type DepositAddress, type WalletSnapshot, type WalletTransaction } from './wallet-api';
 
 type WalletHomeProps = {
   apiBaseUrl: string;
@@ -35,10 +35,29 @@ function shortIdentifier(value: string): string {
   return value.length <= 18 ? value : `${value.slice(0, 9)}…${value.slice(-7)}`;
 }
 
+function transactionTypeLabel(type: string): string {
+  if (type === 'internal_transfer') return '站內轉帳';
+  if (type === 'deposit') return '充值入帳';
+  if (type === 'withdrawal') return '提領';
+  return '其他交易';
+}
+
+function transactionDirectionLabel(direction: string): string {
+  return direction === 'incoming' ? '收入' : direction === 'outgoing' ? '支出' : '異動';
+}
+
+function transactionTimeLabel(createdAt: string): string {
+  const value = new Date(createdAt);
+  return Number.isNaN(value.getTime()) ? '時間待確認' : value.toLocaleString('zh-TW', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
 export function WalletHome({ apiBaseUrl, getAccessToken, onSignOut, username }: WalletHomeProps) {
   const [wallet, setWallet] = useState<WalletSnapshot>();
   const [status, setStatus] = useState<RequestStatus>('idle');
   const [message, setMessage] = useState<string>();
+  const [history, setHistory] = useState<{ nextCursor?: string; transactions: WalletTransaction[] }>();
+  const [historyStatus, setHistoryStatus] = useState<RequestStatus>('idle');
+  const [historyMessage, setHistoryMessage] = useState<string>();
   const [network, setNetwork] = useState<'ethereum' | 'tron'>('ethereum');
   const [depositAddress, setDepositAddress] = useState<DepositAddress>();
   const [recipientWalletId, setRecipientWalletId] = useState('');
@@ -72,9 +91,31 @@ export function WalletHome({ apiBaseUrl, getAccessToken, onSignOut, username }: 
     }
   }, [apiBaseUrl, configured, fetchToken]);
 
+  const loadHistory = useCallback(async (cursor?: string) => {
+    if (!configured) {
+      setHistory(undefined);
+      setHistoryStatus('idle');
+      return;
+    }
+    setHistoryMessage(undefined);
+    setHistoryStatus('loading');
+    try {
+      const page = await getWalletTransactions({ accessToken: await fetchToken(), apiBaseUrl, cursor });
+      setHistory((current) => cursor && current
+        ? { ...page, transactions: [...current.transactions, ...page.transactions] }
+        : page);
+      setHistoryStatus('ready');
+    } catch (reason) {
+      if (!cursor) setHistory(undefined);
+      setHistoryMessage(messageFrom(reason, '未能讀取交易紀錄，請稍後再試。'));
+      setHistoryStatus('error');
+    }
+  }, [apiBaseUrl, configured, fetchToken]);
+
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+    void loadHistory();
+  }, [loadHistory, refresh]);
 
   const selectedBalance = useMemo(
     () => wallet?.balances.find((balance) => balance.assetCode === 'USDT'),
@@ -127,6 +168,7 @@ export function WalletHome({ apiBaseUrl, getAccessToken, onSignOut, username }: 
       setTransferStatus('ready');
       setTransferMessage(`站內轉帳已送出，交易編號 ${shortIdentifier(result.transferId)}。`);
       void refresh();
+      void loadHistory();
     } catch (reason) {
       setTransferStatus('error');
       setTransferMessage(messageFrom(reason, '站內轉帳沒有完成，請稍後再試。'));
@@ -217,16 +259,42 @@ export function WalletHome({ apiBaseUrl, getAccessToken, onSignOut, username }: 
         </View>
 
         <View style={styles.historyCard}>
-          <Text style={styles.actionTitle}>交易紀錄</Text>
-          <Text style={styles.actionBody}>交易紀錄會以帳本確認結果為準。使用者專屬唯讀紀錄 API 尚未啟用，因此此處不會顯示推測或假資料。</Text>
+          <View style={styles.cardHeader}>
+            <Text style={styles.actionTitle}>交易紀錄</Text>
+            <Pressable accessibilityRole="button" disabled={!configured || historyStatus === 'loading'} onPress={() => void loadHistory()} style={({ pressed }) => [styles.historyRefreshButton, (!configured || historyStatus === 'loading') && styles.disabled, pressed && styles.pressed]}>
+              <Text style={styles.historyRefreshText}>{historyStatus === 'loading' ? '更新中' : '重新整理'}</Text>
+            </Pressable>
+          </View>
+          {!configured ? <Text style={styles.actionBody}>尚未連接受保護的錢包 API，因此不會顯示交易資料或假資料。</Text> : null}
+          {configured && historyStatus === 'loading' && !history ? <View style={styles.historyLoading}><ActivityIndicator color="#0b675e" /><Text style={styles.actionBody}>交易紀錄載入中</Text></View> : null}
+          {configured && historyStatus === 'error' ? <View style={styles.historyNotice}><Text style={styles.historyErrorText}>{historyMessage}</Text><Pressable accessibilityRole="button" onPress={() => void loadHistory()} style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}><Text style={styles.retryText}>重新載入</Text></Pressable></View> : null}
+          {configured && historyStatus === 'ready' && !history?.transactions.length ? <Text style={styles.actionBody}>尚無交易紀錄。</Text> : null}
+          {history?.transactions.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} />)}
+          {configured && history?.nextCursor ? <Pressable accessibilityRole="button" disabled={historyStatus === 'loading'} onPress={() => void loadHistory(history.nextCursor)} style={({ pressed }) => [styles.loadMoreButton, historyStatus === 'loading' && styles.disabled, pressed && styles.pressed]}><Text style={styles.loadMoreText}>{historyStatus === 'loading' ? '載入中' : '載入更多'}</Text></Pressable> : null}
         </View>
       </ScrollView>
     </View>
   );
 }
 
+function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
+  const amount = transaction.assetCode === 'USDT' ? formatUsdt(transaction.amountAtoms) : transaction.amountAtoms;
+  return (
+    <View style={styles.transactionRow}>
+      <View style={styles.transactionDetails}>
+        <Text style={styles.transactionType}>{transactionTypeLabel(transaction.type)}</Text>
+        <Text style={styles.transactionTime}>{transactionTimeLabel(transaction.createdAt)}</Text>
+      </View>
+      <View style={styles.transactionAmountBlock}>
+        <Text style={styles.transactionAmount}>{amount} {transaction.assetCode}</Text>
+        <Text style={styles.transactionDirection}>{transactionDirectionLabel(transaction.direction)}</Text>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  page: { backgroundColor: '#f5f7f4', flex: 1 },
+  page: { backgroundColor: '#f5f7f4', flex: 1, overflow: 'hidden' },
   halo: { backgroundColor: '#96e1d6', borderRadius: 999, height: 420, opacity: 0.45, position: 'absolute', right: -180, top: -250, width: 420 },
   scrollView: { flex: 1 },
   scroll: { gap: 22, marginHorizontal: 'auto', maxWidth: 920, padding: 20, paddingBottom: 48, width: '100%' },
@@ -281,4 +349,20 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#f7faf9', borderColor: '#d7e2df', borderRadius: 10, borderWidth: 1, color: '#17312e', fontSize: 15, minHeight: 46, paddingHorizontal: 12 },
   availableHint: { color: '#65807b', fontSize: 12, fontVariant: ['tabular-nums'] },
   historyCard: { backgroundColor: '#edf1ef', borderColor: '#d9e2df', borderRadius: 16, borderWidth: 1, gap: 8, padding: 18 },
+  historyRefreshButton: { borderColor: '#b9ceca', borderRadius: 9, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 7 },
+  historyRefreshText: { color: '#335b55', fontSize: 12, fontWeight: '700' },
+  historyLoading: { alignItems: 'center', flexDirection: 'row', gap: 10, minHeight: 42 },
+  historyNotice: { gap: 10 },
+  historyErrorText: { color: '#a13729', fontSize: 13, lineHeight: 20 },
+  retryButton: { alignItems: 'center', alignSelf: 'flex-start', borderColor: '#b94738', borderRadius: 9, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8 },
+  retryText: { color: '#9d3024', fontSize: 13, fontWeight: '800' },
+  transactionRow: { alignItems: 'center', borderTopColor: '#d4dfdc', borderTopWidth: 1, flexDirection: 'row', gap: 12, justifyContent: 'space-between', paddingTop: 13 },
+  transactionDetails: { flex: 1, gap: 4, minWidth: 0 },
+  transactionType: { color: '#1a312e', fontSize: 15, fontWeight: '800' },
+  transactionTime: { color: '#617872', fontSize: 12, lineHeight: 18 },
+  transactionAmountBlock: { alignItems: 'flex-end', flexShrink: 1, gap: 4 },
+  transactionAmount: { color: '#17312e', fontSize: 14, fontVariant: ['tabular-nums'], fontWeight: '800', textAlign: 'right' },
+  transactionDirection: { color: '#3e7068', fontSize: 12, fontWeight: '700' },
+  loadMoreButton: { alignItems: 'center', borderColor: '#0b675e', borderRadius: 10, borderWidth: 1, justifyContent: 'center', marginTop: 4, minHeight: 42, paddingHorizontal: 14 },
+  loadMoreText: { color: '#0b675e', fontSize: 13, fontWeight: '800' },
 });
