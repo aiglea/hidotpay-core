@@ -10,6 +10,23 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /me/transactions:
+    get:
+      summary: 讀取已登入使用者的錢包交易紀錄
+      description: |
+        帳戶僅由已驗證登入身分在伺服器端導出；請求不得傳入帳戶 ID。
+        cursor 為不透明分頁游標，應原樣帶回下一頁請求。回應只包含交易識別、類型、資產、最小單位金額、收支方向與建立時間；不含交易對手、metadata、付款資料、鏈上地址或雜湊。
+      parameters:
+        - $ref: '#/components/parameters/WalletTransactionLimit'
+        - $ref: '#/components/parameters/WalletTransactionCursor'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WalletTransactionPage' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
   /accounts/{accountId}/balances:
     get:
       summary: 讀取本人帳戶餘額
@@ -184,6 +201,17 @@ components:
     WithdrawalId: { name: withdrawalId, in: path, required: true, schema: { type: string, format: uuid } }
     OrderId: { name: orderId, in: path, required: true, schema: { type: string, format: uuid } }
     IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 128 } }
+    WalletTransactionLimit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+    WalletTransactionCursor:
+      name: cursor
+      in: query
+      required: false
+      description: 不透明游標；只可使用前一頁回應的 next_cursor 原樣傳回。
+      schema: { type: string, minLength: 1, maxLength: 1024 }
   responses:
     Error:
       description: 錯誤
@@ -191,6 +219,27 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
   schemas:
+    WalletTransactionPage:
+      type: object
+      additionalProperties: false
+      required: [transactions, next_cursor]
+      properties:
+        transactions:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, type, asset_code, amount_atoms, direction, created_at]
+            properties:
+              id: { type: string, format: uuid }
+              type: { type: string, example: internal_transfer }
+              asset_code: { type: string, example: USDT }
+              amount_atoms: { type: string, pattern: '^[1-9][0-9]*$', example: '1000000' }
+              direction: { type: string, enum: [incoming, outgoing] }
+              created_at: { type: string, format: date-time }
+        next_cursor:
+          type: [string, 'null']
+          description: 下一頁的不透明游標；最後一頁為 null。
     InternalTransfer:
       type: object
       additionalProperties: false

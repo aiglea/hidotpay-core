@@ -26,6 +26,8 @@ const statusByCode: Record<string, number> = {
   destination_address_blocked: 403,
   invalid_destination_address: 400,
   invalid_network: 400,
+  invalid_wallet_transaction_cursor: 400,
+  invalid_wallet_transaction_page: 400,
   invalid_withdrawal_failure: 400,
   invalid_withdrawal_state: 409,
   platform_not_configured: 503,

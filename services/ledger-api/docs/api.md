@@ -6,6 +6,28 @@
 
 所有金額使用最小單位整數字串，例如 USDT 有 6 位小數時，`1 USDT` 要傳 `"1000000"`。不可傳 `1.0`、`1e6` 或 JavaScript 浮點數。
 
+## 本人交易紀錄
+
+已登入使用者可呼叫 `GET /v1/me/transactions?limit=20&cursor=` 讀取自己的可用錢包帳本紀錄。`limit` 可為 1 到 50，預設為 20；`cursor` 是不透明游標，下一頁時只能把前一頁的 `next_cursor` 原樣帶回，不能自行解析或改寫。
+
+服務會先驗證登入者，再由伺服器端找出其可用錢包帳戶；此接口不接受也不支援任何帳戶 ID 參數。成功回應固定為：
+
+```json
+{
+  "transactions": [{
+    "id": "交易 UUID",
+    "type": "internal_transfer",
+    "asset_code": "USDT",
+    "amount_atoms": "1000000",
+    "direction": "outgoing",
+    "created_at": "2026-08-15T10:00:00.000Z"
+  }],
+  "next_cursor": "不透明游標或 null"
+}
+```
+
+回應絕不包含交易對手帳戶、metadata、付款資料、鏈上地址、交易雜湊或任何金鑰資料。
+
 ## 資金流程
 
 | 流程 | 結果 | 鏈上費用 |

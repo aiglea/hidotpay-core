@@ -61,6 +61,10 @@ const walletAddressBody = z.object({
 }).strict();
 
 const myWalletAddressBody = z.object({ network: z.string() }).strict();
+const walletTransactionQuery = z.object({
+  cursor: z.string().min(1).max(1024).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+}).strict();
 const p2pAdBody = z.object({ asset_code: z.string(), fiat_currency: z.string(), max_amount_atoms: z.string(), min_amount_atoms: z.string(), payment_method_code: z.string(), price_atoms: z.string() }).strict();
 const p2pOrderBody = z.object({ ad_id: z.uuid(), amount_atoms: z.string() }).strict();
 const p2pOrderIdParams = z.object({ orderId: z.uuid() });
@@ -212,6 +216,24 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     const wallet = await options.repository.ensureUserWallet(actor.id);
     const balances = await options.repository.getBalances(wallet.availableAccount.id);
     return { account_id: wallet.availableAccount.id, balances };
+  });
+
+  app.get('/v1/me/transactions', async (request) => {
+    const actor = await authenticate(request.headers);
+    const page = walletTransactionQuery.parse(request.query);
+    const wallet = await options.repository.ensureUserWallet(actor.id);
+    const result = await options.repository.listWalletTransactions(wallet.availableAccount.id, page);
+    return {
+      transactions: result.transactions.map((transaction) => ({
+        id: transaction.id,
+        type: transaction.type,
+        asset_code: transaction.assetCode,
+        amount_atoms: transaction.amountAtoms,
+        direction: transaction.direction,
+        created_at: transaction.createdAt,
+      })),
+      next_cursor: result.nextCursor ?? null,
+    };
   });
 
   if (options.walletAddresses) {
