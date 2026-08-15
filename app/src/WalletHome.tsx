@@ -1,368 +1,98 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { allocateDepositAddress, getWalletSnapshot, getWalletTransactions, submitInternalTransfer, type DepositAddress, type WalletSnapshot, type WalletTransaction } from './wallet-api';
+import { figmaWallet, figmaWalletShared } from './FigmaWalletTheme';
+import { allocateDepositAddress, getWalletSnapshot, getWalletTransactions, type DepositAddress, type WalletSnapshot, type WalletTransaction } from './wallet-api';
 
-type WalletHomeProps = {
-  apiBaseUrl: string;
-  getAccessToken: () => Promise<string | undefined>;
-  onSignOut: () => void;
-  username?: string;
-};
-
+type WalletHomeProps = { apiBaseUrl: string; getAccessToken: () => Promise<string | undefined>; onSignOut: () => void; username?: string };
 type RequestStatus = 'idle' | 'loading' | 'ready' | 'error';
+type Screen = 'home' | 'topup' | 'topup-confirmation' | 'history';
+type Network = 'ethereum' | 'tron';
 
-function messageFrom(reason: unknown, fallback: string): string {
-  return reason instanceof Error && reason.message ? reason.message : fallback;
-}
-
+function messageFrom(reason: unknown, fallback: string): string { return reason instanceof Error && reason.message ? reason.message : fallback; }
 function formatUsdt(atoms: string): string {
   if (!/^\d+$/.test(atoms)) return atoms;
-  const value = BigInt(atoms);
-  const whole = value / 1_000_000n;
-  const fraction = (value % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
+  const value = BigInt(atoms); const whole = value / 1_000_000n; const fraction = (value % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
   return fraction ? `${whole.toLocaleString()}.${fraction}` : whole.toLocaleString();
 }
-
-function usdtToAtoms(value: string): string | undefined {
-  if (!/^\d+(\.\d{0,6})?$/.test(value.trim())) return undefined;
-  const [whole, fraction = ''] = value.trim().split('.');
-  const atoms = BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, '0'));
-  return atoms > 0n ? atoms.toString() : undefined;
-}
-
-function shortIdentifier(value: string): string {
-  return value.length <= 18 ? value : `${value.slice(0, 9)}…${value.slice(-7)}`;
-}
-
-function transactionTypeLabel(type: string): string {
-  if (type === 'internal_transfer') return '站內轉帳';
-  if (type === 'deposit') return '充值入帳';
-  if (type === 'withdrawal') return '提領';
-  return '其他交易';
-}
-
-function transactionDirectionLabel(direction: string): string {
-  return direction === 'incoming' ? '收入' : direction === 'outgoing' ? '支出' : '異動';
-}
-
-function transactionTimeLabel(createdAt: string): string {
-  const value = new Date(createdAt);
-  return Number.isNaN(value.getTime()) ? '時間待確認' : value.toLocaleString('zh-TW', { dateStyle: 'medium', timeStyle: 'short' });
-}
+function transactionLabel(type: string): string { return type === 'internal_transfer' ? '站內轉帳' : type === 'deposit_credit' || type === 'deposit' ? '充值入帳' : type === 'withdrawal' ? '提領' : '錢包異動'; }
+function timeLabel(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? '時間待確認' : date.toLocaleString('zh-TW', { dateStyle: 'medium', timeStyle: 'short' }); }
+function shortAddress(address: string): string { return address.length > 20 ? `${address.slice(0, 10)}…${address.slice(-8)}` : address; }
 
 export function WalletHome({ apiBaseUrl, getAccessToken, onSignOut, username }: WalletHomeProps) {
+  const [screen, setScreen] = useState<Screen>('home');
   const [wallet, setWallet] = useState<WalletSnapshot>();
   const [status, setStatus] = useState<RequestStatus>('idle');
   const [message, setMessage] = useState<string>();
   const [history, setHistory] = useState<{ nextCursor?: string; transactions: WalletTransaction[] }>();
   const [historyStatus, setHistoryStatus] = useState<RequestStatus>('idle');
   const [historyMessage, setHistoryMessage] = useState<string>();
-  const [network, setNetwork] = useState<'ethereum' | 'tron'>('ethereum');
+  const [network, setNetwork] = useState<Network>('ethereum');
   const [depositAddress, setDepositAddress] = useState<DepositAddress>();
-  const [recipientWalletId, setRecipientWalletId] = useState('');
-  const [transferAmount, setTransferAmount] = useState('');
-  const [transferStatus, setTransferStatus] = useState<RequestStatus>('idle');
-  const [transferMessage, setTransferMessage] = useState<string>();
-  const transferIdempotencyKey = useRef<string | undefined>(undefined);
+  const [copied, setCopied] = useState(false);
   const configured = Boolean(apiBaseUrl.trim());
-
-  const fetchToken = useCallback(async () => {
-    const accessToken = await getAccessToken();
-    if (!accessToken) throw new Error('登入憑證尚未就緒，請重新登入後再試。');
-    return accessToken;
-  }, [getAccessToken]);
-
+  const fetchToken = useCallback(async () => { const token = await getAccessToken(); if (!token) throw new Error('登入憑證尚未就緒，請重新登入後再試。'); return token; }, [getAccessToken]);
   const refresh = useCallback(async () => {
-    if (!configured) {
-      setStatus('idle');
-      return;
-    }
-    setMessage(undefined);
-    setStatus('loading');
-    try {
-      const snapshot = await getWalletSnapshot({ accessToken: await fetchToken(), apiBaseUrl });
-      setWallet(snapshot);
-      setStatus('ready');
-    } catch (reason) {
-      setWallet(undefined);
-      setMessage(messageFrom(reason, '未能讀取錢包資料，請稍後再試。'));
-      setStatus('error');
-    }
+    if (!configured) { setStatus('idle'); return; }
+    setMessage(undefined); setStatus('loading');
+    try { setWallet(await getWalletSnapshot({ accessToken: await fetchToken(), apiBaseUrl })); setStatus('ready'); }
+    catch (reason) { setWallet(undefined); setMessage(messageFrom(reason, '未能讀取錢包資料，請稍後再試。')); setStatus('error'); }
   }, [apiBaseUrl, configured, fetchToken]);
-
   const loadHistory = useCallback(async (cursor?: string) => {
-    if (!configured) {
-      setHistory(undefined);
-      setHistoryStatus('idle');
-      return;
-    }
-    setHistoryMessage(undefined);
-    setHistoryStatus('loading');
+    if (!configured) { setHistory(undefined); setHistoryStatus('idle'); return; }
+    setHistoryMessage(undefined); setHistoryStatus('loading');
     try {
       const page = await getWalletTransactions({ accessToken: await fetchToken(), apiBaseUrl, cursor });
-      setHistory((current) => cursor && current
-        ? { ...page, transactions: [...current.transactions, ...page.transactions] }
-        : page);
-      setHistoryStatus('ready');
-    } catch (reason) {
-      if (!cursor) setHistory(undefined);
-      setHistoryMessage(messageFrom(reason, '未能讀取交易紀錄，請稍後再試。'));
-      setHistoryStatus('error');
-    }
+      setHistory((current) => cursor && current ? { ...page, transactions: [...current.transactions, ...page.transactions] } : page); setHistoryStatus('ready');
+    } catch (reason) { if (!cursor) setHistory(undefined); setHistoryMessage(messageFrom(reason, '未能讀取交易紀錄，請稍後再試。')); setHistoryStatus('error'); }
   }, [apiBaseUrl, configured, fetchToken]);
-
-  useEffect(() => {
-    void refresh();
-    void loadHistory();
-  }, [loadHistory, refresh]);
-
-  const selectedBalance = useMemo(
-    () => wallet?.balances.find((balance) => balance.assetCode === 'USDT'),
-    [wallet],
-  );
-
+  useEffect(() => { void refresh(); void loadHistory(); }, [loadHistory, refresh]);
+  const usdt = useMemo(() => wallet?.balances.find((balance) => balance.assetCode === 'USDT'), [wallet]);
   const requestDepositAddress = async () => {
-    setMessage(undefined);
     if (!configured) return;
-    setStatus('loading');
-    try {
-      const address = await allocateDepositAddress({ accessToken: await fetchToken(), apiBaseUrl, network });
-      setDepositAddress(address);
-      setStatus('ready');
-    } catch (reason) {
-      setMessage(messageFrom(reason, '未能建立充值地址，請稍後再試。'));
-      setStatus('error');
-    }
+    setCopied(false); setMessage(undefined); setStatus('loading');
+    try { setDepositAddress(await allocateDepositAddress({ accessToken: await fetchToken(), apiBaseUrl, network })); setStatus('ready'); setScreen('topup-confirmation'); }
+    catch (reason) { setMessage(messageFrom(reason, '未能建立充值地址，請稍後再試。')); setStatus('error'); }
   };
-
-  const sendInternalTransfer = async () => {
-    const amountAtoms = usdtToAtoms(transferAmount);
-    if (!amountAtoms) {
-      setTransferStatus('error');
-      setTransferMessage('請輸入大於 0、最多 6 位小數的 USDT 金額。');
-      return;
-    }
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(recipientWalletId.trim())) {
-      setTransferStatus('error');
-      setTransferMessage('請輸入正確的收款錢包 ID。');
-      return;
-    }
-    if (!configured) return;
-
-    const idempotencyKey = transferIdempotencyKey.current ?? `wallet-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    transferIdempotencyKey.current = idempotencyKey;
-    setTransferMessage(undefined);
-    setTransferStatus('loading');
-    try {
-      const result = await submitInternalTransfer({
-        accessToken: await fetchToken(),
-        amountAtoms,
-        apiBaseUrl,
-        assetCode: 'USDT',
-        idempotencyKey,
-        recipientWalletId: recipientWalletId.trim(),
-      });
-      setTransferAmount('');
-      transferIdempotencyKey.current = undefined;
-      setTransferStatus('ready');
-      setTransferMessage(`站內轉帳已送出，交易編號 ${shortIdentifier(result.transferId)}。`);
-      void refresh();
-      void loadHistory();
-    } catch (reason) {
-      setTransferStatus('error');
-      setTransferMessage(messageFrom(reason, '站內轉帳沒有完成，請稍後再試。'));
-    }
+  const copyAddress = async () => {
+    if (!depositAddress) return;
+    try { await globalThis.navigator?.clipboard?.writeText(depositAddress.address); setCopied(true); } catch { setCopied(false); }
   };
+  const returnHome = () => setScreen('home');
 
-  return (
-    <View style={styles.page}>
-      <View pointerEvents="none" style={styles.halo} />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} style={styles.scrollView}>
-        <View style={styles.topbar}>
-          <View style={styles.brandRow}>
-            <View style={styles.mark}><View style={styles.markCore} /></View>
-            <Text style={styles.brand}>hidotpay</Text>
-          </View>
-          <Pressable accessibilityRole="button" onPress={onSignOut} style={({ pressed }) => [styles.signOut, pressed && styles.pressed]}>
-            <Text style={styles.signOutText}>登出</Text>
-          </Pressable>
-        </View>
+  if (screen === 'topup') return <TopUpScreen configured={configured} loading={status === 'loading'} message={message} network={network} onBack={returnHome} onChooseNetwork={setNetwork} onRequest={() => void requestDepositAddress()} />;
+  if (screen === 'topup-confirmation' && depositAddress) return <TopUpConfirmation address={depositAddress} copied={copied} onBack={() => setScreen('topup')} onCopy={() => void copyAddress()} onDone={returnHome} />;
+  if (screen === 'history') return <HistoryScreen configured={configured} history={history} message={historyMessage} status={historyStatus} onBack={returnHome} onLoad={() => void loadHistory()} onMore={(cursor) => void loadHistory(cursor)} />;
 
-        <View style={styles.welcomeRow}>
-          <View>
-            <Text style={styles.eyebrow}>你的錢包</Text>
-            <Text style={styles.heading}>您好，{username ?? '使用者'}</Text>
-          </View>
-          <View style={styles.liveBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>帳本保護中</Text></View>
-        </View>
-
-        {!configured ? (
-          <View style={styles.protectedCard}>
-            <Text style={styles.protectedTitle}>錢包服務尚未啟用</Text>
-            <Text style={styles.protectedBody}>你已完成登入。為保護資產，系統不會在沒有已驗證 API 與權限設定時顯示測試數字或允許轉帳。</Text>
-          </View>
-        ) : null}
-
-        <View style={styles.balanceCard}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardLabel}>可用資產</Text>
-            <Pressable accessibilityRole="button" disabled={status === 'loading'} onPress={() => void refresh()} style={({ pressed }) => [styles.refreshButton, pressed && styles.pressed]}>
-              <Text style={styles.refreshText}>{status === 'loading' ? '更新中' : '更新餘額'}</Text>
-            </Pressable>
-          </View>
-          {status === 'loading' ? <ActivityIndicator color="#0b675e" style={styles.loader} /> : null}
-          {status === 'error' ? <Text style={styles.errorText}>{message}</Text> : null}
-          {status !== 'loading' && status !== 'error' && configured && !wallet?.balances.length ? (
-            <Text style={styles.emptyText}>尚無已入帳資產。取得充值地址後，請只轉入已啟用網路與資產。</Text>
-          ) : null}
-          {wallet?.balances.map((balance) => (
-            <View key={balance.assetCode} style={styles.assetRow}>
-              <View><Text style={styles.assetCode}>{balance.assetCode}</Text><Text style={styles.assetNetwork}>可用餘額</Text></View>
-              <Text style={styles.assetAmount}>{balance.assetCode === 'USDT' ? formatUsdt(balance.balanceAtoms) : balance.balanceAtoms}</Text>
-            </View>
-          ))}
-          {!configured ? <Text style={styles.emptyText}>尚未連接受保護的錢包 API。</Text> : null}
-        </View>
-
-        <Text style={styles.sectionTitle}>資金操作</Text>
-        <View style={styles.actionGrid}>
-          <View style={styles.actionCard}>
-            <Text style={styles.actionTitle}>充值地址</Text>
-            <Text style={styles.actionBody}>每個帳戶、每條網路都有獨立地址。建立後才會顯示。</Text>
-            <View style={styles.networkRow}>
-              {(['ethereum', 'tron'] as const).map((item) => (
-                <Pressable key={item} accessibilityRole="button" onPress={() => setNetwork(item)} style={[styles.networkChoice, network === item && styles.networkChoiceSelected]}>
-                  <Text style={[styles.networkText, network === item && styles.networkTextSelected]}>{item === 'ethereum' ? 'Ethereum' : 'TRON'}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <Pressable accessibilityRole="button" disabled={!configured || status === 'loading'} onPress={() => void requestDepositAddress()} style={({ pressed }) => [styles.primaryButton, (!configured || status === 'loading') && styles.disabled, pressed && styles.pressed]}>
-              <Text style={styles.primaryButtonText}>{status === 'loading' ? '處理中' : '取得地址'}</Text>
-            </Pressable>
-            {depositAddress ? <View style={styles.addressBox}><Text style={styles.addressLabel}>{depositAddress.network.toUpperCase()} 地址</Text><Text selectable style={styles.addressText}>{depositAddress.address}</Text><Text style={styles.addressHint}>請確認網路一致；轉錯網路可能無法找回。</Text></View> : null}
-          </View>
-
-          <View style={styles.actionCard}>
-            <Text style={styles.actionTitle}>站內轉帳</Text>
-            <Text style={styles.actionBody}>使用 hidotpay 錢包 ID，系統帳本內轉移，不會產生鏈上 gas。</Text>
-            <Text style={styles.inputLabel}>收款錢包 ID</Text>
-            <TextInput accessibilityLabel="收款錢包 ID" autoCapitalize="none" autoCorrect={false} onChangeText={(value) => { transferIdempotencyKey.current = undefined; setRecipientWalletId(value); }} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" placeholderTextColor="#688086" style={styles.input} value={recipientWalletId} />
-            <Text style={styles.inputLabel}>金額（USDT）</Text>
-            <TextInput accessibilityLabel="轉帳金額" inputMode="decimal" keyboardType="decimal-pad" onChangeText={(value) => { transferIdempotencyKey.current = undefined; setTransferAmount(value); }} placeholder="0.00" placeholderTextColor="#688086" style={styles.input} value={transferAmount} />
-            <Text style={styles.availableHint}>目前可用：{selectedBalance ? `${formatUsdt(selectedBalance.balanceAtoms)} USDT` : '尚未讀取'}</Text>
-            <Pressable accessibilityRole="button" disabled={!configured || transferStatus === 'loading'} onPress={() => void sendInternalTransfer()} style={({ pressed }) => [styles.primaryButton, (!configured || transferStatus === 'loading') && styles.disabled, pressed && styles.pressed]}>
-              <Text style={styles.primaryButtonText}>{transferStatus === 'loading' ? '提交中' : '確認站內轉帳'}</Text>
-            </Pressable>
-            {transferMessage ? <Text style={transferStatus === 'error' ? styles.errorText : styles.successText}>{transferMessage}</Text> : null}
-          </View>
-        </View>
-
-        <View style={styles.historyCard}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.actionTitle}>交易紀錄</Text>
-            <Pressable accessibilityRole="button" disabled={!configured || historyStatus === 'loading'} onPress={() => void loadHistory()} style={({ pressed }) => [styles.historyRefreshButton, (!configured || historyStatus === 'loading') && styles.disabled, pressed && styles.pressed]}>
-              <Text style={styles.historyRefreshText}>{historyStatus === 'loading' ? '更新中' : '重新整理'}</Text>
-            </Pressable>
-          </View>
-          {!configured ? <Text style={styles.actionBody}>尚未連接受保護的錢包 API，因此不會顯示交易資料或假資料。</Text> : null}
-          {configured && historyStatus === 'loading' && !history ? <View style={styles.historyLoading}><ActivityIndicator color="#0b675e" /><Text style={styles.actionBody}>交易紀錄載入中</Text></View> : null}
-          {configured && historyStatus === 'error' ? <View style={styles.historyNotice}><Text style={styles.historyErrorText}>{historyMessage}</Text><Pressable accessibilityRole="button" onPress={() => void loadHistory()} style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}><Text style={styles.retryText}>重新載入</Text></Pressable></View> : null}
-          {configured && historyStatus === 'ready' && !history?.transactions.length ? <Text style={styles.actionBody}>尚無交易紀錄。</Text> : null}
-          {history?.transactions.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} />)}
-          {configured && history?.nextCursor ? <Pressable accessibilityRole="button" disabled={historyStatus === 'loading'} onPress={() => void loadHistory(history.nextCursor)} style={({ pressed }) => [styles.loadMoreButton, historyStatus === 'loading' && styles.disabled, pressed && styles.pressed]}><Text style={styles.loadMoreText}>{historyStatus === 'loading' ? '載入中' : '載入更多'}</Text></Pressable> : null}
-        </View>
-      </ScrollView>
-    </View>
-  );
+  return <View style={styles.page}><ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <View style={styles.topbar}><View style={styles.brandRow}><View style={figmaWalletShared.brandMark}><View style={figmaWalletShared.brandMarkCore} /></View><View><Text style={styles.greeting}>您好，{username ?? '使用者'}</Text><Text style={styles.subGreeting}>歡迎回來</Text></View></View><Pressable accessibilityLabel="登出" accessibilityRole="button" onPress={onSignOut} style={({ pressed }) => [styles.profileButton, pressed && figmaWalletShared.pressed]}><Text style={styles.profileButtonText}>登出</Text></Pressable></View>
+    <View style={styles.balanceArea}><Text style={styles.balanceLabel}>總資產</Text>{status === 'loading' ? <ActivityIndicator color={figmaWallet.colors.black} /> : null}{status === 'error' ? <Text style={styles.error}>{message}</Text> : null}{configured && status === 'ready' && usdt ? <Text style={styles.balanceValue}>{formatUsdt(usdt.balanceAtoms)} <Text style={styles.balanceUnit}>USDT</Text></Text> : null}{configured && status === 'ready' && !wallet?.balances.length ? <Text style={styles.balanceEmpty}>尚無已入帳資產</Text> : null}{!configured ? <Text style={styles.balanceEmpty}>錢包 API 尚未啟用，沒有顯示測試餘額。</Text> : null}</View>
+    <View style={styles.actionRow}><Pressable accessibilityLabel="前往多鏈充值" accessibilityRole="button" onPress={() => setScreen('topup')} style={({ pressed }) => [styles.primaryAction, pressed && figmaWalletShared.pressed]}><Text style={styles.actionIcon}>↓</Text><Text style={styles.primaryActionText}>充值</Text></Pressable><View accessibilityLabel="站內轉帳尚未開放" accessibilityRole="text" style={styles.comingAction}><Text style={styles.comingIcon}>↗</Text><Text style={styles.comingText}>轉帳即將開放</Text></View></View>
+    <View style={styles.purpleBanner}><Text style={styles.bannerTitle}>多鏈充值，清楚確認</Text><Text style={styles.bannerBody}>Ethereum 與 TRON 均可取得你的專屬地址。</Text><Pressable accessibilityRole="button" onPress={() => setScreen('topup')}><Text style={styles.bannerLink}>開始充值　→</Text></Pressable></View>
+    <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>交易紀錄</Text><Pressable accessibilityRole="button" onPress={() => setScreen('history')}><Text style={styles.seeAll}>查看全部</Text></Pressable></View>
+    {!configured ? <Text style={styles.notice}>連接受保護 API 後，這裡才會顯示你的真實紀錄。</Text> : null}
+    {configured && historyStatus === 'loading' && !history ? <View style={styles.loadingRow}><ActivityIndicator color={figmaWallet.colors.blue} /><Text style={styles.notice}>正在讀取交易紀錄</Text></View> : null}
+    {configured && historyStatus === 'error' ? <View style={styles.noticeCard}><Text style={styles.errorDark}>{historyMessage}</Text><Pressable accessibilityRole="button" onPress={() => void loadHistory()}><Text style={styles.seeAll}>重新載入</Text></Pressable></View> : null}
+    {configured && historyStatus === 'ready' && !history?.transactions.length ? <Text style={styles.notice}>尚無交易紀錄。完成鏈上充值後會在這裡顯示。</Text> : null}
+    {history?.transactions.slice(0, 3).map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} />)}
+  </ScrollView></View>;
 }
 
-function TransactionRow({ transaction }: { transaction: WalletTransaction }) {
-  const amount = transaction.assetCode === 'USDT' ? formatUsdt(transaction.amountAtoms) : transaction.amountAtoms;
-  return (
-    <View style={styles.transactionRow}>
-      <View style={styles.transactionDetails}>
-        <Text style={styles.transactionType}>{transactionTypeLabel(transaction.type)}</Text>
-        <Text style={styles.transactionTime}>{transactionTimeLabel(transaction.createdAt)}</Text>
-      </View>
-      <View style={styles.transactionAmountBlock}>
-        <Text style={styles.transactionAmount}>{amount} {transaction.assetCode}</Text>
-        <Text style={styles.transactionDirection}>{transactionDirectionLabel(transaction.direction)}</Text>
-      </View>
-    </View>
-  );
+function TopUpScreen({ configured, loading, message, network, onBack, onChooseNetwork, onRequest }: { configured: boolean; loading: boolean; message?: string; network: Network; onBack: () => void; onChooseNetwork: (network: Network) => void; onRequest: () => void }) {
+  return <View style={styles.purplePage}><ScrollView contentContainerStyle={styles.topupScroll} showsVerticalScrollIndicator={false}><TopBar title="充值" onBack={onBack} /><View style={styles.sheet}><Text style={styles.sheetEyebrow}>選擇網路</Text><Text style={styles.sheetTitle}>充值 USDT</Text><Text style={styles.sheetBody}>請選擇轉出平台使用的網路。只可轉入相同網路的 USDT。</Text>{(['ethereum', 'tron'] as const).map((item) => <Pressable key={item} accessibilityRole="button" onPress={() => onChooseNetwork(item)} style={({ pressed }) => [styles.networkCard, network === item && styles.networkCardActive, pressed && figmaWalletShared.pressed]}><View style={[styles.networkBadge, item === 'tron' && styles.tronBadge]}><Text style={styles.networkBadgeText}>{item === 'ethereum' ? 'ETH' : 'TRX'}</Text></View><View style={styles.networkDetails}><Text style={styles.networkName}>{item === 'ethereum' ? 'Ethereum' : 'TRON'}</Text><Text style={styles.networkDescription}>{item === 'ethereum' ? 'ERC-20 · 網路費可能較高' : 'TRC-20 · 請確認轉出端支援'}</Text></View><Text style={styles.choiceMark}>{network === item ? '✓' : ''}</Text></Pressable>)}{message ? <Text style={styles.errorDark}>{message}</Text> : null}<Pressable accessibilityRole="button" disabled={!configured || loading} onPress={onRequest} style={({ pressed }) => [figmaWalletShared.button, (!configured || loading) && styles.disabled, pressed && figmaWalletShared.pressed]}>{loading ? <ActivityIndicator color={figmaWallet.colors.black} /> : <Text style={figmaWalletShared.buttonText}>{configured ? '取得充值地址' : '充值服務尚未啟用'}</Text>}</Pressable></View></ScrollView></View>;
 }
+
+function TopUpConfirmation({ address, copied, onBack, onCopy, onDone }: { address: DepositAddress; copied: boolean; onBack: () => void; onCopy: () => void; onDone: () => void }) {
+  return <View style={styles.purplePage}><ScrollView contentContainerStyle={styles.topupScroll} showsVerticalScrollIndicator={false}><TopBar title="充值地址" onBack={onBack} /><View style={styles.sheet}><View style={styles.successCircle}><Text style={styles.successTick}>✓</Text></View><Text style={styles.sheetTitle}>地址已準備好</Text><Text style={styles.sheetBody}>僅限透過 <Text style={styles.emphasis}>{address.network === 'ethereum' ? 'Ethereum（ERC-20）' : 'TRON（TRC-20）'}</Text> 轉入 USDT。網路不一致可能造成資產遺失。</Text><View style={styles.addressCard}><Text style={styles.addressLabel}>{address.network.toUpperCase()} · USDT</Text><Text selectable style={styles.addressText}>{address.address}</Text><Pressable accessibilityRole="button" onPress={onCopy} style={({ pressed }) => [styles.copyButton, pressed && figmaWalletShared.pressed]}><Text style={styles.copyText}>{copied ? '已複製' : '複製地址'}</Text></Pressable></View><View style={styles.warningCard}><Text style={styles.warningTitle}>充值前請再次確認</Text><Text style={styles.warningBody}>網路、幣種與地址必須完全相同。此地址只代表你的 hidotpay 錢包。</Text></View><Pressable accessibilityRole="button" onPress={onDone} style={({ pressed }) => [figmaWalletShared.button, pressed && figmaWalletShared.pressed]}><Text style={figmaWalletShared.buttonText}>我已了解</Text></Pressable></View></ScrollView></View>;
+}
+
+function HistoryScreen({ configured, history, message, status, onBack, onLoad, onMore }: { configured: boolean; history?: { nextCursor?: string; transactions: WalletTransaction[] }; message?: string; status: RequestStatus; onBack: () => void; onLoad: () => void; onMore: (cursor: string) => void }) {
+  return <View style={styles.page}><ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}><TopBar title="交易紀錄" onBack={onBack} dark /><View style={styles.historyPanel}>{!configured ? <Text style={styles.notice}>錢包 API 尚未啟用。</Text> : null}{status === 'loading' && !history ? <ActivityIndicator color={figmaWallet.colors.blue} /> : null}{status === 'error' ? <><Text style={styles.errorDark}>{message}</Text><Pressable accessibilityRole="button" onPress={onLoad}><Text style={styles.seeAll}>重新載入</Text></Pressable></> : null}{status === 'ready' && !history?.transactions.length ? <Text style={styles.notice}>尚無交易紀錄。</Text> : null}{history?.transactions.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} />)}{history?.nextCursor ? <Pressable accessibilityRole="button" disabled={status === 'loading'} onPress={() => onMore(history.nextCursor!)} style={({ pressed }) => [styles.moreButton, pressed && figmaWalletShared.pressed]}><Text style={styles.moreButtonText}>{status === 'loading' ? '載入中' : '載入更多'}</Text></Pressable> : null}</View></ScrollView></View>;
+}
+
+function TopBar({ title, onBack, dark = false }: { title: string; onBack: () => void; dark?: boolean }) { return <View style={styles.screenTopbar}><Pressable accessibilityLabel="返回" accessibilityRole="button" onPress={onBack} style={styles.backButton}><Text style={[styles.backText, dark && styles.backTextDark]}>‹</Text></Pressable><Text style={[styles.screenTitle, dark && styles.screenTitleDark]}>{title}</Text><View style={styles.backButton} /></View>; }
+function TransactionRow({ transaction }: { transaction: WalletTransaction }) { const incoming = transaction.direction === 'incoming'; const amount = transaction.assetCode === 'USDT' ? formatUsdt(transaction.amountAtoms) : transaction.amountAtoms; return <View style={styles.transactionRow}><View style={[styles.transactionBadge, incoming && styles.transactionBadgeIncoming]}><Text style={styles.transactionArrow}>{incoming ? '↓' : '↑'}</Text></View><View style={styles.transactionMain}><Text numberOfLines={1} style={styles.transactionName}>{transactionLabel(transaction.type)}</Text><Text style={styles.transactionTime}>{timeLabel(transaction.createdAt)}</Text></View><View><Text style={[styles.transactionAmount, incoming && styles.incomingAmount]}>{incoming ? '+' : '-'}{amount}</Text><Text style={styles.transactionAsset}>{transaction.assetCode}</Text></View></View>; }
 
 const styles = StyleSheet.create({
-  page: { backgroundColor: '#f5f7f4', flex: 1, overflow: 'hidden' },
-  halo: { backgroundColor: '#96e1d6', borderRadius: 999, height: 420, opacity: 0.45, position: 'absolute', right: -180, top: -250, width: 420 },
-  scrollView: { flex: 1 },
-  scroll: { gap: 22, marginHorizontal: 'auto', maxWidth: 920, padding: 20, paddingBottom: 48, width: '100%' },
-  topbar: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', minHeight: 46 },
-  brandRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
-  mark: { alignItems: 'center', backgroundColor: '#0b675e', borderRadius: 11, height: 32, justifyContent: 'center', width: 32 },
-  markCore: { backgroundColor: '#d7fbf5', borderRadius: 4, height: 10, transform: [{ rotate: '45deg' }], width: 10 },
-  brand: { color: '#17312e', fontSize: 21, fontWeight: '800', letterSpacing: -0.7 },
-  signOut: { borderColor: '#c8d3d0', borderRadius: 10, borderWidth: 1, paddingHorizontal: 15, paddingVertical: 9 },
-  signOutText: { color: '#33504c', fontSize: 14, fontWeight: '700' },
-  welcomeRow: { alignItems: 'flex-end', flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
-  eyebrow: { color: '#0b675e', fontSize: 12, fontWeight: '800', letterSpacing: 1.3, marginBottom: 7 },
-  heading: { color: '#17312e', fontSize: 30, fontWeight: '800', letterSpacing: -1.1 },
-  liveBadge: { alignItems: 'center', backgroundColor: '#e0f4ed', borderRadius: 999, flexDirection: 'row', gap: 7, paddingHorizontal: 10, paddingVertical: 7 },
-  liveDot: { backgroundColor: '#0b675e', borderRadius: 999, height: 7, width: 7 },
-  liveText: { color: '#205b53', fontSize: 12, fontWeight: '700' },
-  protectedCard: { backgroundColor: '#fff8e7', borderColor: '#ebd6a1', borderRadius: 16, borderWidth: 1, gap: 7, padding: 18 },
-  protectedTitle: { color: '#735600', fontSize: 16, fontWeight: '800' },
-  protectedBody: { color: '#5c4b1b', fontSize: 14, lineHeight: 21 },
-  balanceCard: { backgroundColor: '#113a35', borderRadius: 22, gap: 16, overflow: 'hidden', padding: 22 },
-  cardHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
-  cardLabel: { color: '#c6eae4', fontSize: 14, fontWeight: '700' },
-  refreshButton: { borderColor: '#5a887f', borderRadius: 9, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 7 },
-  refreshText: { color: '#e0f8f3', fontSize: 12, fontWeight: '700' },
-  loader: { alignSelf: 'flex-start', marginVertical: 12 },
-  assetRow: { alignItems: 'center', borderTopColor: '#28574f', borderTopWidth: 1, flexDirection: 'row', justifyContent: 'space-between', paddingTop: 16 },
-  assetCode: { color: '#fbfffd', fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
-  assetNetwork: { color: '#a3c9c1', fontSize: 12, marginTop: 3 },
-  assetAmount: { color: '#fbfffd', fontSize: 24, fontVariant: ['tabular-nums'], fontWeight: '800', letterSpacing: -0.7, maxWidth: '55%', textAlign: 'right' },
-  emptyText: { color: '#b9d8d1', fontSize: 14, lineHeight: 21 },
-  errorText: { color: '#ffc5b8', fontSize: 13, lineHeight: 20, marginTop: 4 },
-  successText: { color: '#0a675c', fontSize: 13, fontWeight: '700', lineHeight: 20, marginTop: 12 },
-  sectionTitle: { color: '#17312e', fontSize: 18, fontWeight: '800', letterSpacing: -0.4, marginTop: 6 },
-  actionGrid: { gap: 16 },
-  actionCard: { backgroundColor: '#ffffff', borderColor: '#dbe3e0', borderRadius: 18, borderWidth: 1, gap: 12, padding: 18 },
-  actionTitle: { color: '#1a312e', fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
-  actionBody: { color: '#55706b', fontSize: 14, lineHeight: 21 },
-  networkRow: { flexDirection: 'row', gap: 9 },
-  networkChoice: { borderColor: '#d1ddda', borderRadius: 9, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },
-  networkChoiceSelected: { backgroundColor: '#e0f4ed', borderColor: '#0b675e' },
-  networkText: { color: '#58716d', fontSize: 13, fontWeight: '700' },
-  networkTextSelected: { color: '#0b675e' },
-  primaryButton: { alignItems: 'center', backgroundColor: '#0b675e', borderRadius: 11, justifyContent: 'center', minHeight: 46, paddingHorizontal: 14 },
-  primaryButtonText: { color: '#f5fffc', fontSize: 14, fontWeight: '800' },
-  disabled: { opacity: 0.45 },
-  pressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
-  addressBox: { backgroundColor: '#edf6f3', borderColor: '#d1e4df', borderRadius: 10, borderWidth: 1, gap: 6, marginTop: 2, padding: 12 },
-  addressLabel: { color: '#39746b', fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
-  addressText: { color: '#17312e', fontFamily: 'monospace', fontSize: 13, lineHeight: 19 },
-  addressHint: { color: '#5a746f', fontSize: 12, lineHeight: 18 },
-  inputLabel: { color: '#47635e', fontSize: 12, fontWeight: '800', marginTop: 2 },
-  input: { backgroundColor: '#f7faf9', borderColor: '#d7e2df', borderRadius: 10, borderWidth: 1, color: '#17312e', fontSize: 15, minHeight: 46, paddingHorizontal: 12 },
-  availableHint: { color: '#65807b', fontSize: 12, fontVariant: ['tabular-nums'] },
-  historyCard: { backgroundColor: '#edf1ef', borderColor: '#d9e2df', borderRadius: 16, borderWidth: 1, gap: 8, padding: 18 },
-  historyRefreshButton: { borderColor: '#b9ceca', borderRadius: 9, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 7 },
-  historyRefreshText: { color: '#335b55', fontSize: 12, fontWeight: '700' },
-  historyLoading: { alignItems: 'center', flexDirection: 'row', gap: 10, minHeight: 42 },
-  historyNotice: { gap: 10 },
-  historyErrorText: { color: '#a13729', fontSize: 13, lineHeight: 20 },
-  retryButton: { alignItems: 'center', alignSelf: 'flex-start', borderColor: '#b94738', borderRadius: 9, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8 },
-  retryText: { color: '#9d3024', fontSize: 13, fontWeight: '800' },
-  transactionRow: { alignItems: 'center', borderTopColor: '#d4dfdc', borderTopWidth: 1, flexDirection: 'row', gap: 12, justifyContent: 'space-between', paddingTop: 13 },
-  transactionDetails: { flex: 1, gap: 4, minWidth: 0 },
-  transactionType: { color: '#1a312e', fontSize: 15, fontWeight: '800' },
-  transactionTime: { color: '#617872', fontSize: 12, lineHeight: 18 },
-  transactionAmountBlock: { alignItems: 'flex-end', flexShrink: 1, gap: 4 },
-  transactionAmount: { color: '#17312e', fontSize: 14, fontVariant: ['tabular-nums'], fontWeight: '800', textAlign: 'right' },
-  transactionDirection: { color: '#3e7068', fontSize: 12, fontWeight: '700' },
-  loadMoreButton: { alignItems: 'center', borderColor: '#0b675e', borderRadius: 10, borderWidth: 1, justifyContent: 'center', marginTop: 4, minHeight: 42, paddingHorizontal: 14 },
-  loadMoreText: { color: '#0b675e', fontSize: 13, fontWeight: '800' },
+  page: { backgroundColor: figmaWallet.colors.canvas, flex: 1, minHeight: '100%', overflow: 'hidden' }, scroll: { alignSelf: 'center', maxWidth: 540, padding: 24, paddingBottom: 44, width: '100%' }, topbar: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' }, brandRow: { alignItems: 'center', flexDirection: 'row', gap: 12, minWidth: 0 }, greeting: { color: figmaWallet.colors.black, fontSize: 16, fontWeight: '800' }, subGreeting: { color: figmaWallet.colors.muted, fontSize: 12, marginTop: 2 }, profileButton: { borderColor: figmaWallet.colors.border, borderRadius: 12, borderWidth: 1, minHeight: 42, paddingHorizontal: 13, justifyContent: 'center' }, profileButtonText: { color: figmaWallet.colors.black, fontSize: 13, fontWeight: '800' }, balanceArea: { gap: 11, marginTop: 40, minHeight: 113 }, balanceLabel: { color: figmaWallet.colors.muted, fontSize: 14 }, balanceValue: { color: figmaWallet.colors.black, fontSize: 39, fontVariant: ['tabular-nums'], fontWeight: '800', letterSpacing: -1.8 }, balanceUnit: { color: figmaWallet.colors.muted, fontSize: 18, fontWeight: '700' }, balanceEmpty: { color: figmaWallet.colors.muted, fontSize: 15, lineHeight: 22, maxWidth: 300 }, error: { color: '#B42318', fontSize: 14, lineHeight: 20 }, actionRow: { flexDirection: 'row', gap: 12, marginTop: 19 }, primaryAction: { alignItems: 'center', backgroundColor: figmaWallet.colors.acid, borderRadius: 24, flex: 1, gap: 8, justifyContent: 'center', minHeight: 94 }, primaryActionText: { color: figmaWallet.colors.black, fontSize: 14, fontWeight: '800' }, actionIcon: { color: figmaWallet.colors.black, fontSize: 27, fontWeight: '400' }, comingAction: { alignItems: 'center', backgroundColor: figmaWallet.colors.soft, borderRadius: 24, flex: 1, gap: 8, justifyContent: 'center', minHeight: 94, opacity: 0.64 }, comingIcon: { color: figmaWallet.colors.black, fontSize: 25 }, comingText: { color: figmaWallet.colors.black, fontSize: 12, fontWeight: '800' }, purpleBanner: { backgroundColor: figmaWallet.colors.blue, borderRadius: 18, marginTop: 24, overflow: 'hidden', padding: 21 }, bannerTitle: { color: '#FFFFFF', fontSize: 21, fontWeight: '800', letterSpacing: -0.6 }, bannerBody: { color: '#DFDCFF', fontSize: 14, lineHeight: 20, marginTop: 7 }, bannerLink: { color: figmaWallet.colors.acid, fontSize: 14, fontWeight: '800', marginTop: 17 }, sectionHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginTop: 29 }, sectionTitle: { color: figmaWallet.colors.black, fontSize: 19, fontWeight: '800' }, seeAll: { color: figmaWallet.colors.blue, fontSize: 14, fontWeight: '800' }, notice: { color: figmaWallet.colors.muted, fontSize: 14, lineHeight: 21, marginTop: 16 }, loadingRow: { alignItems: 'center', flexDirection: 'row', gap: 10 }, noticeCard: { backgroundColor: '#FFF6F4', borderRadius: 12, gap: 8, marginTop: 16, padding: 14 }, errorDark: { color: '#A23A2C', fontSize: 14, lineHeight: 20 }, transactionRow: { alignItems: 'center', borderColor: figmaWallet.colors.border, borderRadius: 15, borderWidth: 1, flexDirection: 'row', gap: 12, marginTop: 14, padding: 13 }, transactionBadge: { alignItems: 'center', backgroundColor: figmaWallet.colors.violetSoft, borderRadius: 17, height: 42, justifyContent: 'center', width: 42 }, transactionBadgeIncoming: { backgroundColor: '#F0FFD0' }, transactionArrow: { color: figmaWallet.colors.black, fontSize: 21 }, transactionMain: { flex: 1, minWidth: 0 }, transactionName: { color: figmaWallet.colors.black, fontSize: 14, fontWeight: '800' }, transactionTime: { color: figmaWallet.colors.muted, fontSize: 11, marginTop: 4 }, transactionAmount: { color: figmaWallet.colors.black, fontSize: 14, fontVariant: ['tabular-nums'], fontWeight: '800', textAlign: 'right' }, incomingAmount: { color: '#237D4B' }, transactionAsset: { color: figmaWallet.colors.muted, fontSize: 11, marginTop: 4, textAlign: 'right' }, purplePage: { backgroundColor: figmaWallet.colors.blue, flex: 1, minHeight: '100%' }, topupScroll: { alignSelf: 'center', maxWidth: 540, minHeight: '100%', width: '100%' }, screenTopbar: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', minHeight: 114, paddingHorizontal: 24 }, backButton: { alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 18, height: 36, justifyContent: 'center', width: 36 }, backText: { color: '#FFFFFF', fontSize: 32, fontWeight: '300', lineHeight: 35, marginTop: -3 }, backTextDark: { color: figmaWallet.colors.black }, screenTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '800' }, screenTitleDark: { color: figmaWallet.colors.black }, sheet: { backgroundColor: figmaWallet.colors.canvas, borderTopLeftRadius: 32, borderTopRightRadius: 32, flexGrow: 1, gap: 14, minHeight: 710, padding: 24, paddingTop: 31 }, sheetEyebrow: { color: figmaWallet.colors.muted, fontSize: 14 }, sheetTitle: { color: figmaWallet.colors.black, fontSize: 29, fontWeight: '800', letterSpacing: -1.1 }, sheetBody: { color: figmaWallet.colors.muted, fontSize: 14, lineHeight: 21, marginBottom: 12 }, emphasis: { color: figmaWallet.colors.black, fontWeight: '800' }, networkCard: { alignItems: 'center', borderColor: figmaWallet.colors.border, borderRadius: 16, borderWidth: 1, flexDirection: 'row', gap: 13, minHeight: 80, padding: 13 }, networkCardActive: { backgroundColor: '#FAFFEC', borderColor: figmaWallet.colors.acid, borderWidth: 2 }, networkBadge: { alignItems: 'center', backgroundColor: '#E7E0FF', borderRadius: 18, height: 44, justifyContent: 'center', width: 44 }, tronBadge: { backgroundColor: '#FFE2E1' }, networkBadgeText: { color: figmaWallet.colors.black, fontSize: 11, fontWeight: '800' }, networkDetails: { flex: 1, minWidth: 0 }, networkName: { color: figmaWallet.colors.black, fontSize: 16, fontWeight: '800' }, networkDescription: { color: figmaWallet.colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 }, choiceMark: { color: figmaWallet.colors.black, fontSize: 19, fontWeight: '800' }, successCircle: { alignItems: 'center', alignSelf: 'center', backgroundColor: figmaWallet.colors.acid, borderRadius: 34, height: 68, justifyContent: 'center', marginBottom: 12, width: 68 }, successTick: { color: figmaWallet.colors.black, fontSize: 34, fontWeight: '800' }, addressCard: { backgroundColor: figmaWallet.colors.soft, borderRadius: 15, gap: 11, padding: 16 }, addressLabel: { color: figmaWallet.colors.muted, fontSize: 12, fontWeight: '800', letterSpacing: 0.8 }, addressText: { color: figmaWallet.colors.black, fontFamily: 'monospace', fontSize: 14, lineHeight: 21 }, copyButton: { alignItems: 'center', borderColor: figmaWallet.colors.border, borderRadius: 9, borderWidth: 1, justifyContent: 'center', minHeight: 40 }, copyText: { color: figmaWallet.colors.blue, fontSize: 13, fontWeight: '800' }, warningCard: { backgroundColor: '#FFF7DF', borderRadius: 14, gap: 5, marginBottom: 8, padding: 14 }, warningTitle: { color: '#674A00', fontSize: 14, fontWeight: '800' }, warningBody: { color: '#715E2A', fontSize: 12, lineHeight: 18 }, historyPanel: { paddingBottom: 20 }, moreButton: { alignItems: 'center', borderColor: figmaWallet.colors.border, borderRadius: 12, borderWidth: 1, justifyContent: 'center', marginTop: 16, minHeight: 48 }, moreButtonText: { color: figmaWallet.colors.black, fontSize: 14, fontWeight: '800' }, disabled: { opacity: 0.48 },
 });

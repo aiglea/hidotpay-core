@@ -28,6 +28,13 @@ export default function NativeHomeScreen() {
     });
   };
 
+  const beginSignUp = () => {
+    setActionError(undefined);
+    void signIn({ firstScreen: 'register', redirectUri: 'hidotpay://callback' }).catch((reason: unknown) => {
+      setActionError(reason instanceof Error ? reason.message : '無法開始建立帳戶，請稍後再試。');
+    });
+  };
+
   const beginSignOut = () => {
     setActionError(undefined);
     void signOut().catch((reason: unknown) => {
@@ -56,6 +63,7 @@ export default function NativeHomeScreen() {
       error={actionError}
       onSignIn={beginSignIn}
       onSignOut={beginSignOut}
+      onSignUp={beginSignUp}
       username={username}
     />
   );
