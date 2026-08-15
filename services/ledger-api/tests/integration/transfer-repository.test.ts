@@ -29,8 +29,8 @@ test('CockroachDB transfer is balanced and idempotent', { skip: !databaseUrl }, 
     );
     await pool.query(
       `INSERT INTO account_balances (account_id, asset_code, balance_atoms) VALUES
-       ($1, $2, 2000000), ($3, $2, 0)`,
-      [senderAccountId, assetCode, recipientAccountId],
+       ($1, $2, 2000000)`,
+      [senderAccountId, assetCode],
     );
 
     const repository = new PostgresLedgerRepository(pool);
@@ -56,6 +56,41 @@ test('CockroachDB transfer is balanced and idempotent', { skip: !databaseUrl }, 
       [first.transferId],
     );
     assert.equal(postings.rows[0]?.total, '0');
+  } finally {
+    await pool.end();
+  }
+});
+
+test('CockroachDB serializes concurrent first receipts into a new wallet balance row', { skip: !databaseUrl }, async () => {
+  const pool = new Pool({ connectionString: databaseUrl });
+  const assetCode = `T${randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`;
+  const senderOneId = randomUUID();
+  const senderTwoId = randomUUID();
+  const senderOneAccountId = randomUUID();
+  const senderTwoAccountId = randomUUID();
+  const recipientAccountId = randomUUID();
+  try {
+    await applyMigrations(pool);
+    await pool.query('INSERT INTO assets (code, display_name, decimals) VALUES ($1, $2, $3)', [assetCode, assetCode, 6]);
+    await pool.query(
+      `INSERT INTO accounts (id, owner_id, account_kind) VALUES
+       ($1, $2, 'user_available'), ($3, $4, 'user_available'), ($5, $6, 'user_available')`,
+      [senderOneAccountId, senderOneId, senderTwoAccountId, senderTwoId, recipientAccountId, randomUUID()],
+    );
+    await pool.query(
+      `INSERT INTO account_balances (account_id, asset_code, balance_atoms) VALUES
+       ($1, $2, 1000000), ($3, $2, 1000000)`,
+      [senderOneAccountId, assetCode, senderTwoAccountId],
+    );
+
+    const repository = new PostgresLedgerRepository(pool);
+    const outcomes = await Promise.allSettled([
+      repository.transferInternal({ actorId: senderOneId, amountAtoms: '1000000', assetCode, fromAccountId: senderOneAccountId, idempotencyKey: `first-receipt-${randomUUID()}`, requestHash: randomUUID(), toAccountId: recipientAccountId }),
+      repository.transferInternal({ actorId: senderTwoId, amountAtoms: '1000000', assetCode, fromAccountId: senderTwoAccountId, idempotencyKey: `first-receipt-${randomUUID()}`, requestHash: randomUUID(), toAccountId: recipientAccountId }),
+    ]);
+
+    assert.equal(outcomes.filter((outcome) => outcome.status === 'fulfilled').length, 2);
+    assert.deepEqual(await repository.getBalances(recipientAccountId), [{ assetCode, balanceAtoms: '2000000' }]);
   } finally {
     await pool.end();
   }

@@ -34,6 +34,10 @@ type BalanceRow = {
   status: string;
 };
 
+type AccountLockRow = {
+  account_id: string;
+};
+
 type IdempotencyRow = {
   request_hash: string;
   response_body: { transfer_id?: string; withdrawal_id?: string };
@@ -433,6 +437,20 @@ export class PostgresLedgerRepository implements LedgerRepository {
 
     const amountAtoms = parsePositiveAtoms(input.amountAtoms);
     await this.requireAsset(client, input.assetCode);
+    // Validate the transfer before creating balance rows.  The two account
+    // rows are then locked in a deterministic order before their balance rows
+    // are created, so first-time receipts cannot race into a missing balance.
+    const transaction = buildInternalTransfer(input);
+    const accountIds = [input.fromAccountId, input.toAccountId].sort();
+    const lockedAccounts = await client.query<AccountLockRow>(
+      `SELECT id AS account_id
+       FROM accounts
+       WHERE id IN ($1, $2)
+       ORDER BY id FOR UPDATE`,
+      accountIds,
+    );
+    if (lockedAccounts.rowCount !== 2) throw new DomainError('account_not_found');
+    await this.ensureBalanceRows(client, accountIds, input.assetCode);
     const accounts = await client.query<BalanceRow>(
       `SELECT balances.account_id, balances.asset_code, balances.balance_atoms::STRING, accounts.owner_id, accounts.account_kind, accounts.status
        FROM account_balances AS balances
@@ -451,7 +469,6 @@ export class PostgresLedgerRepository implements LedgerRepository {
     }
     if (BigInt(source.balance_atoms) < amountAtoms) throw new DomainError('insufficient_funds');
 
-    const transaction = buildInternalTransfer(input);
     await client.query(
       `INSERT INTO ledger_transactions
        (id, transaction_type, idempotency_scope, idempotency_key, request_hash, actor_id, metadata)
