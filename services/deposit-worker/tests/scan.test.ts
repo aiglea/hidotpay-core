@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { DepositScanner, InMemoryDepositScanStore } from '../src/scanner.js';
+import type { DepositObservation, ScanCursor } from '../src/scanner.js';
 import type { ChainAdapter, ChainTransfer, TransferQuery } from '../../ledger-api/src/chains/adapter.js';
 import { ChainAssetPolicyRegistry } from '../../ledger-api/src/chains/policy.js';
 
@@ -9,15 +10,41 @@ class FixtureAdapter implements ChainAdapter {
   public readonly network = 'tron-shasta';
   public head = 10;
   public reorged = false;
+  public calls: string[] = [];
   public queries: TransferQuery[] = [];
 
-  public async getHead(): Promise<number> { return this.head; }
-  public async getBlockHash(height: number): Promise<string> { return `${this.reorged ? 'reorg' : 'canonical'}-${height}`; }
+  public async getHead(): Promise<number> {
+    this.calls.push('getHead');
+    return this.head;
+  }
+  public async getBlockHash(height: number): Promise<string> {
+    this.calls.push(`getBlockHash:${height}`);
+    return `${this.reorged ? 'reorg' : 'canonical'}-${height}`;
+  }
   public async listTokenTransfers(query: TransferQuery): Promise<ChainTransfer[]> {
     this.queries.push(query);
     return query.fromBlock <= 8 && query.toBlock >= 8
       ? [{ amountAtoms: '1000000', blockHash: 'canonical-8', blockHeight: 8, contractIdentifier: 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj', destinationAddress: 'T111111111111111111111111111111111', eventIndex: 0, network: this.network, transactionHash: 'tx-001' }]
       : [];
+  }
+}
+
+class WriteTrackingStore extends InMemoryDepositScanStore {
+  public writes: string[] = [];
+
+  public override async saveCursor(network: string, cursor: ScanCursor): Promise<void> {
+    this.writes.push('saveCursor');
+    await super.saveCursor(network, cursor);
+  }
+
+  public override async upsertObservation(observation: DepositObservation): Promise<'creditable' | 'already_credited'> {
+    this.writes.push('upsertObservation');
+    return super.upsertObservation(observation);
+  }
+
+  public override async markCredited(observation: DepositObservation): Promise<void> {
+    this.writes.push('markCredited');
+    await super.markCredited(observation);
   }
 }
 
@@ -42,6 +69,34 @@ test('scanner returns safely without side effects when no safe block is availabl
   assert.deepEqual(credited, []);
   assert.equal(await store.cursor('tron-shasta'), undefined);
   assert.deepEqual(store.observations(), []);
+});
+
+test('scanner waits for the safety window, then credits the transfer exactly once across a restart', async () => {
+  const adapter = new FixtureAdapter();
+  adapter.head = 8;
+  const store = new InMemoryDepositScanStore();
+  let creditCalls = 0;
+  const creditor = { async credit() { creditCalls += 1; } };
+  const target = { accountId: 'account-1', address: 'T111111111111111111111111111111111', assetCode: 'USDT' };
+  const scanner = new DepositScanner(adapter, store, policy, { reorgWindow: 2 }, creditor);
+
+  await scanner.scan([target], 7);
+  assert.equal(creditCalls, 0);
+  assert.deepEqual(adapter.queries, []);
+  assert.equal(await store.cursor('tron-shasta'), undefined);
+  assert.deepEqual(store.observations(), []);
+
+  adapter.head = 10;
+  await scanner.scan([target], 7);
+  assert.equal(creditCalls, 1);
+  assert.equal((await store.cursor('tron-shasta'))?.height, 8);
+  assert.deepEqual(store.observations().map(({ status, transactionHash }) => ({ status, transactionHash })), [{ status: 'credited', transactionHash: 'tx-001' }]);
+
+  const restartedScanner = new DepositScanner(adapter, store, policy, { reorgWindow: 2 }, creditor);
+  await restartedScanner.scan([target], 7);
+  assert.equal(creditCalls, 1);
+  assert.equal((await store.cursor('tron-shasta'))?.height, 8);
+  assert.deepEqual(store.observations().map(({ status, transactionHash }) => ({ status, transactionHash })), [{ status: 'credited', transactionHash: 'tx-001' }]);
 });
 
 test('scanner only scans through the safe head and never advances its cursor into the reorg window', async () => {
@@ -96,6 +151,30 @@ test('scanner fails closed on a deep reorg without changing stored data or credi
   assert.deepEqual(store.observations(), observationsBeforeReorg);
   assert.equal(adapter.queries.length, queriesBeforeReorg);
   assert.deepEqual(credited, ['tx-001']);
+});
+
+test('scanner validates the saved cursor hash before querying head and fails closed on a deep reorg', async () => {
+  const adapter = new FixtureAdapter();
+  const store = new WriteTrackingStore();
+  let creditCalls = 0;
+  const scanner = new DepositScanner(adapter, store, policy, { reorgWindow: 2 }, { async credit() { creditCalls += 1; } });
+  const target = { accountId: 'account-1', address: 'T111111111111111111111111111111111', assetCode: 'USDT' };
+  await scanner.scan([target], 7);
+  const cursorBeforeReorg = await store.cursor('tron-shasta');
+  const observationsBeforeReorg = store.observations();
+  const queriesBeforeReorg = adapter.queries.length;
+  adapter.calls = [];
+  store.writes = [];
+  adapter.reorged = true;
+
+  await assert.rejects(() => scanner.scan([target], 7), /deep_chain_reorg_detected/);
+
+  assert.deepEqual(adapter.calls, ['getBlockHash:8']);
+  assert.deepEqual(store.writes, []);
+  assert.equal(adapter.queries.length, queriesBeforeReorg);
+  assert.equal(creditCalls, 1);
+  assert.deepEqual(await store.cursor('tron-shasta'), cursorBeforeReorg);
+  assert.deepEqual(store.observations(), observationsBeforeReorg);
 });
 
 test('scanner limits a recovery scan to a bounded block range and resumes at the persisted boundary', async () => {

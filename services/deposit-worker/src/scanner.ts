@@ -60,11 +60,11 @@ export class DepositScanner {
   public async scan(targets: DepositTarget[], firstBlock: number): Promise<{ candidates: number; fromBlock: number; head: number; reorgRecovered: boolean }> {
     if (!Number.isSafeInteger(firstBlock) || firstBlock < 0) throw new Error('firstBlock must be a non-negative integer');
     await this.store.assertNoOrphanedCredits(this.adapter.network);
+    const cursor = await this.store.cursor(this.adapter.network);
+    if (cursor && await this.adapter.getBlockHash(cursor.height) !== cursor.blockHash) throw new Error('deep_chain_reorg_detected');
     const head = await this.adapter.getHead();
     const safeHead = head - this.config.reorgWindow;
     if (safeHead < firstBlock) return { candidates: 0, fromBlock: firstBlock, head, reorgRecovered: false };
-    const cursor = await this.store.cursor(this.adapter.network);
-    if (cursor && await this.adapter.getBlockHash(cursor.height) !== cursor.blockHash) throw new Error('deep_chain_reorg_detected');
     const fromBlock = cursor ? cursor.height + 1 : firstBlock;
     if (fromBlock > safeHead) return { candidates: 0, fromBlock, head, reorgRecovered: false };
     const toBlock = Math.min(safeHead, fromBlock + (this.config.maxBlockRange ?? Number.MAX_SAFE_INTEGER) - 1);
