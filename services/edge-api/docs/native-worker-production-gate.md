@@ -19,7 +19,7 @@
 
 測試網掃描由 `hidotpay-deposit-scanner-staging` 以 cron 呼叫此路徑。公開 RPC：
 
-- Ethereum Sepolia：`https://rpc.sepolia.org`、`https://ethereum-sepolia-rpc.publicnode.com`、`https://1rpc.io/sepolia`
+- Ethereum Sepolia：`https://ethereum-sepolia-rpc.publicnode.com`、`https://1rpc.io/sepolia`、`https://gateway.tenderly.co/public/sepolia`
 - TRON Shasta：`https://api.shasta.trongrid.io`
 
 沒有游標時，掃描器會把游標錨在目前安全水位，不回補歷史區塊。這不是主網資金入口。

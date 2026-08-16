@@ -1,3 +1,5 @@
+import { boundRuntimeFetch, rpcTimeoutSignal } from './rpc-timeout.js';
+
 type Fetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
 type TransferQuery = { contractIdentifier: string; fromBlock: number; toBlock: number; watchedAddresses: string[] };
 type RpcTransfer = { amountAtoms: string; blockHash: string; blockHeight: number; contractIdentifier: string; destinationAddress: string; logIndex: number; transactionHash: string };
@@ -14,7 +16,7 @@ export class EvmJsonRpcProvider {
   public constructor(config: { fetch?: Fetch; url: string }) {
     this.endpoint = new URL(config.url);
     if (this.endpoint.protocol !== 'https:' || this.endpoint.username || this.endpoint.password || this.endpoint.hash) throw new Error('EVM RPC URL must be HTTPS without credentials');
-    this.fetcher = config.fetch ?? fetch;
+    this.fetcher = config.fetch ?? boundRuntimeFetch;
   }
 
   public async getChainId(): Promise<number> { return this.hexNumber(await this.call('eth_chainId', [])); }
@@ -45,9 +47,9 @@ export class EvmJsonRpcProvider {
   }
 
   private async call(method: string, params: unknown[]): Promise<unknown> {
-    const response = await this.fetcher(this.endpoint, {
+    const response = await this.fetcher(this.endpoint.toString(), {
       body: JSON.stringify({ id: 1, jsonrpc: '2.0', method, params }),
-      headers: { 'content-type': 'application/json' }, method: 'POST', signal: AbortSignal.timeout(10_000),
+      headers: { 'content-type': 'application/json' }, method: 'POST', signal: rpcTimeoutSignal(10_000),
     });
     if (!response.ok) throw new Error('EVM RPC request failed');
     const payload = await response.json() as { error?: unknown; result?: unknown };

@@ -1,3 +1,4 @@
+import { boundRuntimeFetch } from './rpc-timeout.js';
 import type { DepositCreditor, DepositObservation } from './scanner.js';
 
 type Fetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
@@ -10,7 +11,7 @@ export class LedgerDepositCreditor implements DepositCreditor {
     this.endpoint = new URL(config.url);
     if (this.endpoint.protocol !== 'https:' || this.endpoint.username || this.endpoint.password || this.endpoint.hash) throw new Error('ledger deposit endpoint must be private HTTPS');
     if (config.bearerToken.length < 16) throw new Error('ledger chain worker token is invalid');
-    this.fetcher = config.fetch ?? fetch;
+    this.fetcher = config.fetch ?? boundRuntimeFetch;
   }
 
   public async credit(observation: DepositObservation): Promise<void> {

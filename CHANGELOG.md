@@ -3,7 +3,7 @@
 ## 0.2.66 — 2026-08-16
 
 - 原生帳本補上受保護的測試網入帳路徑 `POST /v1/deposits/confirmed`：只接受 `CHAIN_OPERATOR_TOKEN` 服務身分，拒絕使用者 JWT、`x-actor-id` 與瀏覽器 Origin；主網與非正式網路在寫入前拒絕；同一筆鏈上觀測重送不會重複入帳。
-- 新增 `hidotpay-deposit-scanner-staging`：每分鐘用公開測試網 RPC 掃描 Ethereum Sepolia 與 TRON Shasta，經 Worker service binding 入帳。沒有游標時錨在目前安全水位，不回補歷史。公開端點為 `https://rpc.sepolia.org`、`https://ethereum-sepolia-rpc.publicnode.com`、`https://1rpc.io/sepolia`、`https://api.shasta.trongrid.io`。
+- 新增 `hidotpay-deposit-scanner-staging`：每分鐘用公開測試網 RPC 掃描 Ethereum Sepolia 與 TRON Shasta，經 Worker service binding 入帳。沒有游標時錨在目前安全水位，不回補歷史。公開端點為 `https://ethereum-sepolia-rpc.publicnode.com`、`https://1rpc.io/sepolia`、`https://gateway.tenderly.co/public/sepolia`、`https://api.shasta.trongrid.io`。
 - 錢包改為配置 Sepolia／Shasta 測試網地址，並說明「等待第一筆測試網入帳」。提領維持關閉。這不是企業級託管，也不能保管真實資產。
 
 ## 0.2.65 — 2026-08-16

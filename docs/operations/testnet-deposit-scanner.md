@@ -15,7 +15,7 @@
 
 | 網路 | chain id / 識別 | RPC（依序 failover） |
 | --- | --- | --- |
-| `ethereum-sepolia` | 11155111 | `https://rpc.sepolia.org`、`https://ethereum-sepolia-rpc.publicnode.com`、`https://1rpc.io/sepolia` |
+| `ethereum-sepolia` | 11155111 | `https://ethereum-sepolia-rpc.publicnode.com`、`https://1rpc.io/sepolia`、`https://gateway.tenderly.co/public/sepolia` |
 | `tron-shasta` | genesis `0000000000000000de1aa88295e1fcf982742f773e0419c5a9c134c994a9059e` | `https://api.shasta.trongrid.io` |
 
 失敗關閉：單一 RPC 錯誤或 chain id／genesis 不符會改試下一個；全部失敗則該輪掃描失敗，不前進游標、不入帳。
@@ -34,6 +34,8 @@ Sepolia 上的 USDT **不是** Tether 官方發行。主網合約不會被入帳
 ## 游標
 
 第一次掃描若沒有游標，會把游標寫在 `head - 32`，不回補歷史。使用者必須在掃描器上線後再轉入測試幣。
+
+Hyperdrive 使用 `hidotpay_ledger_runtime`。掃描器需要對 `chain_scan_cursors` 與 `chain_deposit_observations` 的 `SELECT, INSERT, UPDATE`；見 `deployment/cloudflare/scanner-runtime-grants.sql`。沒有這些權限時，掃描會失敗關閉，不會前進游標。
 
 ## 禁止
 

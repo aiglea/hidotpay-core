@@ -3,9 +3,9 @@ import { DomainError } from '../../ledger-api/src/domain/errors.js';
 
 export const PUBLIC_TESTNET_RPCS = Object.freeze({
   'ethereum-sepolia': Object.freeze([
-    'https://rpc.sepolia.org',
     'https://ethereum-sepolia-rpc.publicnode.com',
     'https://1rpc.io/sepolia',
+    'https://gateway.tenderly.co/public/sepolia',
   ]),
   'tron-shasta': Object.freeze([
     'https://api.shasta.trongrid.io',

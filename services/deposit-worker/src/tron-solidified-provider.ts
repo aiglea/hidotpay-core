@@ -1,3 +1,4 @@
+import { boundRuntimeFetch, rpcTimeoutSignal } from './rpc-timeout.js';
 import type { ChainTransfer, TransferQuery } from './scanner.js';
 
 type Fetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
@@ -13,7 +14,7 @@ export class TronSolidifiedProvider {
     this.endpoint = new URL(config.url);
     if (this.endpoint.protocol !== 'https:' || this.endpoint.username || this.endpoint.password || this.endpoint.hash) throw new Error('TRON endpoint must be private HTTPS');
     if (config.apiKey.length < 16) throw new Error('TRON API key is invalid');
-    this.fetcher = config.fetch ?? fetch;
+    this.fetcher = config.fetch ?? boundRuntimeFetch;
   }
 
   public async getHead(): Promise<number> {
@@ -69,7 +70,7 @@ export class TronSolidifiedProvider {
   private async post(path: string, body: unknown): Promise<unknown> { return this.request(new URL(path, this.endpoint), { body: JSON.stringify(body), method: 'POST' }); }
   private async get(url: URL): Promise<unknown> { return this.request(url, { method: 'GET' }); }
   private async request(url: URL, init: RequestInit): Promise<unknown> {
-    const response = await this.fetcher(url, { ...init, headers: { 'content-type': 'application/json', 'TRON-PRO-API-KEY': this.config.apiKey }, signal: AbortSignal.timeout(10_000) });
+    const response = await this.fetcher(url.toString(), { ...init, headers: { 'content-type': 'application/json', 'TRON-PRO-API-KEY': this.config.apiKey }, signal: rpcTimeoutSignal(10_000) });
     if (!response.ok) throw new Error('TRON request failed');
     return response.json();
   }

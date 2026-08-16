@@ -22,14 +22,18 @@ export class EvmFailoverAdapter implements DepositChainAdapter {
   }
 
   private async withProvider<T>(operation: (provider: EvmProvider) => Promise<T>): Promise<T> {
+    const failures: string[] = [];
     for (const provider of this.providers) {
       try {
-        if (await provider.getChainId() !== this.expectedChainId) continue;
+        if (await provider.getChainId() !== this.expectedChainId) {
+          failures.push('wrong chain');
+          continue;
+        }
         return await operation(provider);
-      } catch {
-        // A failed or wrong-chain endpoint is skipped; no returned data is trusted.
+      } catch (error) {
+        failures.push(error instanceof Error ? error.message : 'unknown');
       }
     }
-    throw new Error('all EVM RPC providers are unavailable or on the wrong chain');
+    throw new Error(`all EVM RPC providers are unavailable or on the wrong chain: ${failures.join('; ')}`);
   }
 }

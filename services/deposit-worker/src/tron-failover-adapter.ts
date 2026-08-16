@@ -10,12 +10,18 @@ export class TronFailoverAdapter implements DepositChainAdapter {
   public getBlockHash(height: number): Promise<string> { return this.withProvider((provider) => provider.getBlockHash(height)); }
   public async listTokenTransfers(query: TransferQuery): Promise<ChainTransfer[]> { return (await this.withProvider((provider) => provider.listTokenTransfers(query))).map((transfer) => ({ ...transfer, network: this.network })); }
   private async withProvider<T>(operation: (provider: TronProvider) => Promise<T>): Promise<T> {
+    const failures: string[] = [];
     for (const provider of this.providers) {
       try {
-        if ((await provider.getBlockHash(0)).toLowerCase() !== this.expectedGenesisBlockHash.toLowerCase()) continue;
+        if ((await provider.getBlockHash(0)).toLowerCase() !== this.expectedGenesisBlockHash.toLowerCase()) {
+          failures.push('wrong chain');
+          continue;
+        }
         return await operation(provider);
-      } catch { /* failed or wrong-chain provider is never trusted */ }
+      } catch (error) {
+        failures.push(error instanceof Error ? error.message : 'unknown');
+      }
     }
-    throw new Error('all TRON providers are unavailable or on the wrong chain');
+    throw new Error(`all TRON providers are unavailable or on the wrong chain: ${failures.join('; ')}`);
   }
 }

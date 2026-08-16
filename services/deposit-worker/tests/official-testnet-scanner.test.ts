@@ -10,10 +10,11 @@ import { InMemoryDepositScanStore } from '../src/scanner.js';
 
 test('staging scanner is pinned to public official testnet RPCs and rejects mainnet', () => {
   assert.deepEqual(PUBLIC_TESTNET_RPCS['ethereum-sepolia'], [
-    'https://rpc.sepolia.org',
     'https://ethereum-sepolia-rpc.publicnode.com',
     'https://1rpc.io/sepolia',
+    'https://gateway.tenderly.co/public/sepolia',
   ]);
+  assert.doesNotMatch(PUBLIC_TESTNET_RPCS['ethereum-sepolia'].join(' '), /rpc\.sepolia\.org/);
   assert.deepEqual(PUBLIC_TESTNET_RPCS['tron-shasta'], [
     'https://api.shasta.trongrid.io',
   ]);
@@ -74,6 +75,12 @@ test('deposit scanner worker is a cron Worker that credits through the ledger se
   assert.match(worker, /bootstrapScanCursor/);
   assert.match(worker, /runConfiguredNetwork/);
   assert.doesNotMatch(worker, /PRIVATE_KEY|MNEMONIC|SEED/i);
+  const evmProvider = readFileSync(new URL('../src/evm-rpc-provider.ts', import.meta.url), 'utf8');
+  const tronProvider = readFileSync(new URL('../src/tron-solidified-provider.ts', import.meta.url), 'utf8');
+  assert.match(evmProvider, /boundRuntimeFetch/);
+  assert.match(tronProvider, /boundRuntimeFetch/);
+  assert.doesNotMatch(evmProvider, /config\.fetch \?\? fetch/);
+  assert.doesNotMatch(tronProvider, /config\.fetch \?\? fetch/);
   assert.match(wrangler, /"name": "hidotpay-deposit-scanner-staging"/);
   assert.match(wrangler, /"binding": "HYPERDRIVE"/);
   assert.match(wrangler, /"binding": "NATIVE_LEDGER"/);
