@@ -1,3 +1,4 @@
+import { isMainnetDepositNetwork } from '../domain/deposit-credit-policy.js';
 import { DomainError } from '../domain/errors.js';
 import { isValidIdempotencyKey, requestHash } from '../domain/idempotency.js';
 import { parseNonNegativeAtoms, parsePositiveAtoms } from '../domain/money.js';
@@ -56,6 +57,7 @@ export class FundingService {
   public async confirmDeposit(actorId: string, input: DepositConfirmationRequest): Promise<DepositResult> {
     parsePositiveAtoms(input.amountAtoms);
     if (!/^[A-Za-z0-9._:-]{2,64}$/.test(input.network)) throw new DomainError('invalid_network');
+    if (isMainnetDepositNetwork(input.network)) throw new DomainError('deposit_mainnet_disabled');
     if (!/^[A-Za-z0-9:_-]{8,256}$/.test(input.transactionHash)) throw new DomainError('invalid_chain_transaction');
     if (!/^[A-Za-z0-9._:-]{2,256}$/.test(input.contractIdentifier) || !/^[1-9][0-9]*$/.test(input.blockHeight) || !/^[A-Za-z0-9:_-]{8,256}$/.test(input.blockHash)) {
       throw new DomainError('invalid_deposit');

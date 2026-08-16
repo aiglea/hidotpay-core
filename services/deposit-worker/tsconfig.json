@@ -10,5 +10,10 @@
     "target": "ES2024",
     "types": ["node"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "src/bootstrap-scan-cursor.ts",
+    "src/deposit-scanner-worker.ts",
+    "src/official-testnet-scanner.ts"
+  ]
 }

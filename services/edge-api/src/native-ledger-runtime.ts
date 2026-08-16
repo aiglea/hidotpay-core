@@ -13,8 +13,10 @@ import { PostgresP2PAdRepository, type P2PAdRecord } from '../../ledger-api/src/
 import { PostgresP2POrderRepository } from '../../ledger-api/src/repositories/postgres-p2p-order-repository.js';
 import { PostgresP2PPaymentMethodRepository } from '../../ledger-api/src/repositories/postgres-p2p-payment-method-repository.js';
 import { PostgresWalletAddressRepository } from '../../ledger-api/src/repositories/postgres-wallet-address-repository.js';
+import { assertOfficialTestnetDepositNetwork } from '../../ledger-api/src/domain/deposit-credit-policy.js';
 import { FundingService, fixedWithdrawalFeePolicy, type WithdrawalFeePolicy } from '../../ledger-api/src/services/funding-service.js';
 import { TransferService } from '../../ledger-api/src/services/transfer-service.js';
+import { nativeErrorResponse } from './native-response.js';
 import type { NativeLedgerRuntime } from './native-ledger-worker.js';
 
 export type NativeLedgerRuntimeEnv = {
@@ -36,6 +38,7 @@ export type P2POrderActionsRepository = Pick<PostgresP2POrderRepository, 'transi
 export type P2PPaymentMethodsRepository = Pick<PostgresP2PPaymentMethodRepository, 'create' | 'listForOwner'>;
 export type WalletAddressOwnerRepository = Pick<LedgerRepository, 'ensureUserWallet' | 'getAccount'>;
 export type WalletAddressAllocator = Pick<PostgresWalletAddressRepository, 'allocate'>;
+export type ConfirmedDepositRepository = Pick<LedgerRepository, 'confirmDeposit'>;
 
 function invalidRequest(): Response {
   return Response.json({ code: 'invalid_request', message: '請求格式不正確' }, { status: 400 });
@@ -225,6 +228,41 @@ function isP2PPaymentMethodBody(value: unknown): value is {
     && typeof body.account_payload === 'string'
     && typeof body.currency === 'string'
     && (body.method_code === 'bank_transfer' || body.method_code === 'e_wallet');
+}
+
+function isConfirmedDepositBody(value: unknown): value is {
+  amount_atoms: string;
+  asset_code: string;
+  block_hash: string;
+  block_height: string;
+  confirmation_count: number;
+  contract_identifier: string;
+  destination_account_id: string;
+  network: string;
+  output_index: number;
+  transaction_hash: string;
+} {
+  if (!value || typeof value !== 'object') return false;
+  const body = value as Record<string, unknown>;
+  const keys = Object.keys(body);
+  return keys.length === 10
+    && keys.every((key) => [
+      'amount_atoms', 'asset_code', 'block_hash', 'block_height', 'confirmation_count',
+      'contract_identifier', 'destination_account_id', 'network', 'output_index', 'transaction_hash',
+    ].includes(key))
+    && typeof body.amount_atoms === 'string'
+    && typeof body.asset_code === 'string'
+    && typeof body.block_hash === 'string'
+    && typeof body.block_height === 'string'
+    && typeof body.confirmation_count === 'number'
+    && Number.isInteger(body.confirmation_count)
+    && typeof body.contract_identifier === 'string'
+    && typeof body.destination_account_id === 'string'
+    && isUuid(body.destination_account_id)
+    && typeof body.network === 'string'
+    && typeof body.output_index === 'number'
+    && Number.isInteger(body.output_index)
+    && typeof body.transaction_hash === 'string';
 }
 
 function isNetworkBody(value: unknown): value is { network: string } {
@@ -473,6 +511,64 @@ export function createP2PPaymentMethodsRouter(repository: P2PPaymentMethodsRepos
   };
 }
 
+export function createConfirmedDepositRouter(repository: ConfirmedDepositRepository): NativeLedgerRuntime<Actor> {
+  const funding = new FundingService({
+    confirmDeposit: (input) => repository.confirmDeposit(input),
+    createWithdrawalFeeQuote: async () => {
+      throw new Error('Withdrawal fee quotes are not available from the deposit credit route');
+    },
+    requestWithdrawal: async () => {
+      throw new Error('Withdrawal requests are not available from the deposit credit route');
+    },
+  }, {
+    quote: () => {
+      throw new Error('Withdrawal fee quotes are not available from the deposit credit route');
+    },
+  });
+
+  return {
+    async handle(request: Request, actor: Actor): Promise<Response> {
+      if (request.method !== 'POST' || new URL(request.url).pathname !== '/v1/deposits/confirmed') {
+        return new Response('Not Found', { status: 404 });
+      }
+      if (!actor.roles.includes('chain_worker')) {
+        return Response.json({ code: 'forbidden', message: '請求無法處理' }, { status: 403 });
+      }
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        return invalidRequest();
+      }
+      if (!isConfirmedDepositBody(body)) return invalidRequest();
+      try {
+        assertOfficialTestnetDepositNetwork(body.network);
+        const result = await funding.confirmDeposit(actor.id, {
+          amountAtoms: body.amount_atoms,
+          assetCode: body.asset_code,
+          blockHash: body.block_hash,
+          blockHeight: body.block_height,
+          confirmationCount: body.confirmation_count,
+          contractIdentifier: body.contract_identifier,
+          destinationAccountId: body.destination_account_id,
+          network: body.network,
+          outputIndex: body.output_index,
+          transactionHash: body.transaction_hash,
+        });
+        return Response.json({
+          deposit_id: result.depositId,
+          ledger_transaction_id: result.transferId,
+          status: 'credited',
+        }, { status: result.created ? 201 : 200 });
+      } catch (error) {
+        const response = nativeErrorResponse(error);
+        if (response) return response;
+        throw error;
+      }
+    },
+  };
+}
+
 export function createWalletAddressRouter(
   repository: WalletAddressOwnerRepository,
   walletAddresses: WalletAddressAllocator,
@@ -553,6 +649,9 @@ export function createNativeLedgerRuntime(env: NativeLedgerRuntimeEnv): NativeLe
             pool,
             signerAddressDeriverFromEnv(env),
           )).handle(request, actor);
+        }
+        if (request.method === 'POST' && pathname === '/v1/deposits/confirmed') {
+          return await createConfirmedDepositRouter(repository).handle(request, actor);
         }
         return await createReadOnlyWalletRouter(repository).handle(request, actor);
       } finally {

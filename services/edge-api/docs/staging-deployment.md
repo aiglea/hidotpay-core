@@ -45,6 +45,7 @@ npx --no-install wrangler secret put OPENBAO_TRANSIT_URL
 npx --no-install wrangler secret put OPENBAO_TRANSIT_TOKEN
 npx --no-install wrangler secret put SIGNER_DERIVATION_URL
 npx --no-install wrangler secret put SIGNER_SERVICE_TOKEN
+npx --no-install wrangler secret put CHAIN_OPERATOR_TOKEN
 npx --no-install wrangler secret put WITHDRAWAL_FEE_SCHEDULE
 ```
 

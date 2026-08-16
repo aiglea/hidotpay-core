@@ -96,4 +96,19 @@ describe('financial edge worker project', () => {
     assert.doesNotMatch(config, /DATABASE_URL|postgres(?:ql)?:\/\//i);
   });
 
+  it('exposes a fail-closed chain-operator deposit credit path and keeps withdrawals closed', async () => {
+    const worker = await readFile(new URL('../src/native-ledger-worker.ts', import.meta.url), 'utf8');
+    const entry = await readFile(new URL('../src/native-ledger-entry.ts', import.meta.url), 'utf8');
+    const runtime = await readFile(new URL('../src/native-ledger-runtime.ts', import.meta.url), 'utf8');
+    const gate = await readFile(new URL('../docs/native-worker-production-gate.md', import.meta.url), 'utf8');
+    assert.match(worker, /\/v1\/deposits\/confirmed/);
+    assert.match(entry, /authenticateChainOperator/);
+    assert.match(runtime, /createConfirmedDepositRouter/);
+    assert.match(gate, /\/v1\/deposits\/confirmed/);
+    assert.match(gate, /CHAIN_OPERATOR_TOKEN/);
+    assert.match(gate, /ethereum-sepolia/);
+    assert.match(gate, /tron-shasta/);
+    assert.doesNotMatch(gate, /WITHDRAWALS_ENABLED=true/);
+  });
+
 });

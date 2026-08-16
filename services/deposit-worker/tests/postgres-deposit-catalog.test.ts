@@ -15,5 +15,5 @@ test('deposit catalog reads only active user deposit addresses and enabled offic
 
   assert.deepEqual(await catalog.targets('ethereum-sepolia'), [{ accountId: 'account-1', address: '0x2222222222222222222222222222222222222222', assetCode: 'USDT' }]);
   assert.deepEqual(await catalog.policies('ethereum-sepolia'), [{ assetCode: 'USDT', contractIdentifier: '0x1111111111111111111111111111111111111111', minimumConfirmations: 12 }]);
-  assert.deepEqual(calls, [['ethereum-sepolia'], ['ethereum-sepolia']]);
+  assert.deepEqual(calls, [[['ethereum-sepolia', 'ethereum'], 'ethereum-sepolia'], ['ethereum-sepolia']]);
 });

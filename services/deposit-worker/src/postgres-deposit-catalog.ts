@@ -1,5 +1,11 @@
 import type { DepositTarget } from './scanner.js';
 
+function addressNetworksFor(network: string): string[] {
+  if (network === 'ethereum-sepolia') return ['ethereum-sepolia', 'ethereum'];
+  if (network === 'tron-shasta') return ['tron-shasta', 'tron'];
+  return [network];
+}
+
 type Queryable = { query<T extends Record<string, unknown>>(sql: string, values: unknown[]): Promise<{ rows: T[] }> };
 export type DepositAssetPolicy = { assetCode: string; contractIdentifier: string; minimumConfirmations: number };
 
@@ -8,16 +14,17 @@ export class PostgresDepositCatalog {
   public constructor(private readonly pool: Queryable) {}
 
   public async targets(network: string): Promise<DepositTarget[]> {
+    const addressNetworks = addressNetworksFor(network);
     const result = await this.pool.query<{ account_id: string; address: string; asset_code: string }>(
       `SELECT wa.account_id::STRING AS account_id, wa.address, ca.asset_code
        FROM wallet_addresses wa
        JOIN accounts account ON account.id = wa.account_id
-       JOIN chain_assets ca ON ca.network = wa.network AND ca.enabled = true
-       JOIN chain_networks cn ON cn.network = wa.network AND cn.enabled = true
+       JOIN chain_assets ca ON ca.network = $2 AND ca.enabled = true
+       JOIN chain_networks cn ON cn.network = $2 AND cn.enabled = true
        JOIN assets asset ON asset.code = ca.asset_code AND asset.enabled = true
-       WHERE wa.network = $1 AND wa.status = 'active' AND account.account_kind = 'user_available' AND account.status = 'active'
+       WHERE wa.network = ANY($1::STRING[]) AND wa.status = 'active' AND account.account_kind = 'user_available' AND account.status = 'active'
        ORDER BY wa.created_at ASC, ca.asset_code ASC`,
-      [network],
+      [addressNetworks, network],
     );
     return result.rows.map((row) => ({ accountId: row.account_id, address: row.address, assetCode: row.asset_code }));
   }

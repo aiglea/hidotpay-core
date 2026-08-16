@@ -19,8 +19,8 @@ test('Figma 錢包引導提供登入、建立帳戶與安全的非帳密入口',
 test('Figma 錢包首頁僅提供 Ethereum 與 TRON 的真實充值流程', () => {
   const home = source('src/WalletHome.tsx');
 
-  assert.match(home, /'ethereum'/);
-  assert.match(home, /'tron'/);
+  assert.match(home, /'ethereum-sepolia'/);
+  assert.match(home, /'tron-shasta'/);
   assert.match(home, /allocateDepositAddress/);
   assert.match(home, /topup-confirmation/);
   assert.match(home, /submitInternalTransfer/);

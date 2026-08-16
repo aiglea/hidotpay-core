@@ -15,9 +15,16 @@
 - P2P 廣告、訂單、託管狀態動作、仲裁與收款方式
 - Ethereum／TRON 充值公開地址（經 `DEPOSIT_SIGNER` service binding）
 
-原生 Worker **沒有** `/v1/deposits/confirmed`。測試網掃描入帳仍由獨立 `deposit-worker` 負責，且尚未接到此 staging 入口。
+原生 Worker 現在有受保護的 `POST /v1/deposits/confirmed`。此路徑**不接受**終端使用者 Logto JWT，也不接受 `x-actor-id`。呼叫者必須出示 Worker Secret `CHAIN_OPERATOR_TOKEN`（至少 16 字元，timing-safe 比對）。帶有瀏覽器 `Origin` 的請求一律 403。只接受官方測試網 `ethereum-sepolia` 與 `tron-shasta`；名稱含 `mainnet` 的網路在寫入帳本前拒絕。
 
-所有 `/v1/` 請求都先驗證 Logto bearer token；未驗證請求不得建立資料庫連線、錢包、地址、報價、轉帳或 P2P 訂單。提款功能在 Worker 中不提供開啟路徑。
+測試網掃描由 `hidotpay-deposit-scanner-staging` 以 cron 呼叫此路徑。公開 RPC：
+
+- Ethereum Sepolia：`https://rpc.sepolia.org`、`https://ethereum-sepolia-rpc.publicnode.com`、`https://1rpc.io/sepolia`
+- TRON Shasta：`https://api.shasta.trongrid.io`
+
+沒有游標時，掃描器會把游標錨在目前安全水位，不回補歷史區塊。這不是主網資金入口。
+
+除入帳路徑外，其餘 `/v1/` 請求都先驗證 Logto bearer token；未驗證請求不得建立資料庫連線、錢包、地址、報價、轉帳或 P2P 訂單。提款功能在 Worker 中不提供開啟路徑。
 
 ## 必要的 Worker Secret
 
@@ -26,6 +33,7 @@
 - `OPENBAO_TRANSIT_URL`、`OPENBAO_TRANSIT_TOKEN`：加密 P2P 收款資料；缺少時路由必須失敗。
 - `SIGNER_SERVICE_TOKEN`：帳本呼叫隔離簽名服務時使用的服務權杖；缺少時充值地址路由必須失敗關閉，並回傳 `signer_unavailable`。
 - `SIGNER_DERIVATION_URL`：僅在沒有 `DEPOSIT_SIGNER` service binding 時作為後備 HTTPS 路徑；正式 staging 必須用 Worker 對 Worker binding，不得依賴公網呼叫簽名器。
+- `CHAIN_OPERATOR_TOKEN`：僅供充值掃描器呼叫 `/v1/deposits/confirmed` 的服務身分。不得放入錢包 App、NocoBase、瀏覽器或公開文件。缺少或短於 16 字元時，入帳路徑必須失敗關閉。
 
 私鑰、助記詞、seed 與任意簽名 API 一律不得放入 Worker。
 

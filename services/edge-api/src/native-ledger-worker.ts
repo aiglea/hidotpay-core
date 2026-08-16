@@ -11,7 +11,7 @@ export type NativeLedgerWorkerEnv = {
 };
 
 export type NativeLedgerWorkerOptions<Env extends NativeLedgerWorkerEnv, Actor> = {
-  authenticate(env: Env, headers: Headers): Promise<Actor>;
+  authenticate(env: Env, headers: Headers, request: Request): Promise<Actor>;
   createRuntime(env: Env): Promise<NativeLedgerRuntime<Actor>>;
 };
 
@@ -25,10 +25,11 @@ export function createNativeLedgerHandler<Env extends NativeLedgerWorkerEnv, Act
     if (corsHeaders === null) return new Response('Forbidden', { status: 403 });
     const respond = (response: Response) => withCors(response, corsHeaders);
     if (!request.headers.get('authorization')) return respond(new Response('Unauthorized', { status: 401 }));
+    if (pathname === '/v1/deposits/confirmed' && request.headers.get('origin')) return respond(new Response('Forbidden', { status: 403 }));
     if (env.LEDGER_API_ENABLED !== 'true') return respond(new Response('Service Unavailable', { status: 503 }));
 
     try {
-      const actor = await options.authenticate(env, request.headers);
+      const actor = await options.authenticate(env, request.headers, request);
       return respond(await (await options.createRuntime(env)).handle(request, actor));
     } catch (error) {
       const response = nativeErrorResponse(error);

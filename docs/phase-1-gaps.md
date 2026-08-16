@@ -1,7 +1,7 @@
 # 第一階段完成度與正式上線缺口
 
 更新日期：2026-08-16
-適用版本：0.2.65
+適用版本：0.2.66
 
 這份表把「程式已完成並驗證」和「外部環境已正式驗收」分開。任何標示為外部驗收未完成的項目，都表示不能開啟真實資產充值或提現。沒有第二人、沒有付費的 HSM／多區叢集，就不能宣稱「已可保管真實資產」。
 
@@ -19,14 +19,16 @@
 | P2P 託管 | 廣告、下單、鎖定、買家付款、賣家放幣、逾時退款、爭議仲裁和付款資訊遮罩均有角色與帳本測試 | `services/ledger-api/tests/http/p2p-orders.test.ts`、`services/ledger-api/tests/integration/p2p-order-repository.test.ts` |
 | 可靠事件與工作流 | Outbox、Redpanda publisher、Temporal 工作流與 Blnk 對帳的重試／去重行為已測試 | `services/outbox-publisher/tests/*.test.ts`、`services/workflows/tests/*.test.ts`、`services/reconciliation-worker/tests/*.test.ts` |
 | 低代碼後台唯讀投影 | 投影工作者只能讀指定 `admin_*` 檢視表並寫入可重建後台資料；實測投影服務不能讀取資料或使用者，財務檢視者不能寫入 | `services/admin-read-model-worker/tests/*.test.ts`、`deployment/nocobase/read-model-role.test.mjs`、`deployment/nocobase/smoke-read-model.sh` |
-| CockroachDB 遷移安全 | 空白資料庫已完成 17 個 migration；線上欄位回填採逐條執行且可安全重跑；專用測試帳號獲得既有和日後 migration 資料表權限 | `services/ledger-api/tests/migration-runner.test.ts`、`services/ledger-api/tests/migrations.test.ts`、`services/ledger-api/tests/test-database-privileges.test.ts` |
+| 測試網入帳路徑 | 原生 Worker 有 fail-closed 的 `POST /v1/deposits/confirmed`：只接受 `CHAIN_OPERATOR_TOKEN` 服務身分，拒絕終端使用者 JWT、`x-actor-id` 與瀏覽器 Origin；主網與非正式網路在寫入前拒絕；同一觀測重送不重複入帳 | `services/edge-api/tests/native-deposit-credit.test.mjs`、`services/ledger-api/tests/services/funding-service-deposit.test.ts` |
+| CockroachDB 遷移安全 | 空白資料庫已完成 18 個 migration（含官方 Sepolia／Shasta USDT 政策種子）；線上欄位回填採逐條執行且可安全重跑；專用測試帳號獲得既有和日後 migration 資料表權限 | `services/ledger-api/tests/migration-runner.test.ts`、`services/ledger-api/tests/migrations.test.ts`、`services/ledger-api/tests/test-database-privileges.test.ts` |
 
 ## 已部署、但仍是封閉候選環境的項目
 
 | 項目 | 現況 | 為何尚不能當成正式資金環境 |
 | --- | --- | --- |
-| 錢包 UI | `hidotpay-wallet-ui` 已部署；登入走 Logto；失效 refresh token 會清掉本機登入，不會刷 console | 真實登入後的餘額／地址／轉帳仍需操作者用自己的 Logto 帳號走完；P2P 前台未接 |
-| 原生帳本 Worker | `hidotpay-native-ledger-staging`：`/healthz` 200、未登入 401、`LEDGER_API_ENABLED=true`、`WITHDRAWALS_ENABLED=false` | 這是 staging 候選，不是主網資金入口；沒有 `/v1/deposits/confirmed` |
+| 錢包 UI | `hidotpay-wallet-ui` 已部署；登入走 Logto；失效 refresh token 會清掉本機登入；空餘額會說明等待第一筆測試網入帳 | 這是測試網錢包，不是主網。P2P 前台未接 |
+| 原生帳本 Worker | `hidotpay-native-ledger-staging`：`/healthz` 200、未登入 401、`LEDGER_API_ENABLED=true`、`WITHDRAWALS_ENABLED=false`、已有 `/v1/deposits/confirmed` | 這是 staging／測試網候選，不是主網資金入口 |
+| 測試網掃描器 | `hidotpay-deposit-scanner-staging` 每分鐘掃描 Sepolia／Shasta 公開 RPC，經 service binding 入帳；無游標時錨在安全水位，不回補歷史 | 公開 RPC 可能限流或短暫失敗；沒有付費私有 RPC。Sepolia「USDT」不是 Tether 官方發行。尚未用真實測試幣走完一筆端到端入帳 |
 | 充值簽名器 | `hidotpay-deposit-signer-staging` 只回公開地址；帳本以 `DEPOSIT_SIGNER` service binding 呼叫，不走公網 | 持有的是 account xpub，不是 HSM。主種子只在操作者鑰匙圈。不能保管真實資產 |
 | CockroachDB Cloud | 已有隔離測試／staging 資料庫；本機投影工作者可讀 `admin_*` 檢視 | 尚未取得多區域正式集群、備份與還原演練證據 |
 | NocoBase | 本機 `http://127.0.0.1:13000` Compose 健康；管理者可登入；六個投影集合與財務唯讀角色可重跑；投影一次成功 | 私有開發後台。尚未 VPN／HTTPS 正式網路、雲端密鑰服務、備份還原與第二人驗收 |
@@ -42,11 +44,11 @@
 
 ### P0：必須先完成（會被外部帳號／費用擋住）
 
-1. **測試網充值掃描入帳**：為 EVM／TRON 測試網提供公開或私有 RPC；把 `deposit-worker` 接到原生帳本尚不存在的 `/v1/deposits/confirmed`（或同等受保護入帳路徑）。沒有 RPC 就不能誠實說「鏈上入帳已通」。
-2. **正式簽名器與金鑰隔離**：Turnkey 或同等 HSM／Web3Signer 需操作者註冊並付費。在那之前 `WITHDRAWALS_ENABLED=false`。xpub 充值簽名器不是提領簽名器。
-3. **正式資料保護**：CockroachDB 多可用區正式集群、加密備份、還原演練與告警。Blnk 亦需私有網路與可還原多副本。
-4. **真實 Logto 權限驗收**：用一般使用者、鏈上工作程式、財務覆核員、仲裁員四種真實 token 實測允許與拒絕，並保存結果。
-5. **雙人變更制度**：兩個不同職責的人完成簽名、風控、白名單、限額、測試網週期與回滾證據覆核後，才可評估開啟主網資金開關。
+1. **正式簽名器與金鑰隔離**：Turnkey 或同等 HSM／Web3Signer 需操作者註冊並付費。在那之前 `WITHDRAWALS_ENABLED=false`。xpub 充值簽名器不是提領簽名器。
+2. **正式資料保護**：CockroachDB 多可用區正式集群、加密備份、還原演練與告警。Blnk 亦需私有網路與可還原多副本。
+3. **真實 Logto 權限驗收**：用一般使用者、鏈上工作程式、財務覆核員、仲裁員四種真實 token 實測允許與拒絕，並保存結果。
+4. **雙人變更制度**：兩個不同職責的人完成簽名、風控、白名單、限額、測試網週期與回滾證據覆核後，才可評估開啟主網資金開關。
+5. **真實測試幣入帳演練**：程式與公開 RPC 掃描已接上；仍缺操作者用自己的測試 USDT 打到已配置地址、看到餘額更新的現場紀錄。這不是主網驗收。
 
 ### P1：與 P0 並行完成
 
@@ -65,7 +67,7 @@
 
 | 下一輪工作 | 我可以先做的 | 會被你擋住、不能假裝完成的 |
 | --- | --- | --- |
-| 測試網入帳 | 原生帳本補受保護的入帳路徑、掃描器接 staging、失敗關閉測試 | 你提供／付費的測試網 RPC（或允許使用公開測試網端點的書面決定） |
+| 真實測試幣入帳 | 掃描器與入帳路徑已在；可協助對帳一筆公開測試網轉帳 | 你從自己的測試錢包轉出 Sepolia／Shasta 測試 USDT |
 | P2P UI | 依現有狀態機做錢包前台，不上主網 | 無；可在下一輪直接做 |
 | Turnkey／HSM 提領 | 維持 `WITHDRAWALS_ENABLED=false`；接好失敗關閉介面 | 你註冊並付費 Turnkey／HSM，並指定第二覆核人 |
 | 多區資料庫 | 寫遷移與權限；不把單區 staging 標成正式 | 你建立並付費 Cockroach 多可用區叢集，完成備份還原演練 |

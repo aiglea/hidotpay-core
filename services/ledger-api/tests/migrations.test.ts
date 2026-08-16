@@ -16,6 +16,7 @@ const p2pEscrowMigrationPath = fileURLToPath(new URL('../migrations/014_p2p_escr
 const p2pTimeoutMigrationPath = fileURLToPath(new URL('../migrations/015_p2p_payment_timeout.sql', import.meta.url));
 const p2pPaymentMethodsMigrationPath = fileURLToPath(new URL('../migrations/016_p2p_payment_methods.sql', import.meta.url));
 const p2pConstraintRepairMigrationPath = fileURLToPath(new URL('../migrations/017_repair_p2p_constraint_names.sql', import.meta.url));
+const officialTestnetDepositPolicyPath = fileURLToPath(new URL('../migrations/018_official_testnet_deposit_policy.sql', import.meta.url));
 
 test('financial migration contains no destructive DDL and creates the immutable journal', () => {
   const sql = readFileSync(migrationPath, 'utf8');
@@ -147,4 +148,14 @@ test('P2P constraint repair removes CockroachDB generated legacy names before re
   assert.match(sql, /ALTER TABLE ledger_transactions DROP CONSTRAINT IF EXISTS check_transaction_type/i);
   assert.match(sql, /p2p_escrow/);
   assert.match(sql, /p2p_escrow_lock/);
+});
+
+test('official testnet deposit policy seeds only Sepolia and Shasta USDT', () => {
+  const sql = readFileSync(officialTestnetDepositPolicyPath, 'utf8');
+  assert.doesNotMatch(sql, /\b(DROP|DELETE|TRUNCATE)\s+(TABLE|DATABASE|SCHEMA)\b/i);
+  assert.match(sql, /ethereum-sepolia/);
+  assert.match(sql, /tron-shasta/);
+  assert.match(sql, /0x7169D38820dfd117C3FA1f22a697dBA58d90BA06/);
+  assert.match(sql, /TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj/);
+  assert.doesNotMatch(sql, /mainnet|0xdAC17F958D2ee523a2206206994597C13D831ec7|TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t/i);
 });

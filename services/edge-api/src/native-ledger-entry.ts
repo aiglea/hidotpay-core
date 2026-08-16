@@ -1,5 +1,5 @@
 import { createNativeLedgerHandler, type NativeLedgerWorkerEnv } from './native-ledger-worker.js';
-import { authenticateNativeLedgerRequest, type NativeLedgerAuthEnv } from './native-ledger-auth.js';
+import { authenticateChainOperator, authenticateNativeLedgerRequest, type NativeLedgerAuthEnv } from './native-ledger-auth.js';
 import { createNativeLedgerRuntime } from './native-ledger-runtime.js';
 import type { Actor } from '../../ledger-api/src/http/auth.js';
 
@@ -15,7 +15,10 @@ export interface Env extends NativeLedgerAuthEnv, NativeLedgerWorkerEnv {
 }
 
 const handler = createNativeLedgerHandler<Env, Actor>({
-  authenticate: async (env, headers) => authenticateNativeLedgerRequest(env, headers),
+  authenticate: async (env, headers, request) => {
+    if (new URL(request.url).pathname === '/v1/deposits/confirmed') return authenticateChainOperator(env, headers);
+    return authenticateNativeLedgerRequest(env, headers);
+  },
   createRuntime: async (env) => createNativeLedgerRuntime(env),
 });
 

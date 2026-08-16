@@ -1,0 +1,22 @@
+{
+  "name": "hidotpay-deposit-scanner-staging",
+  "main": "src/deposit-scanner-worker.ts",
+  "compatibility_date": "2026-08-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "cab293cdae3e461cb46ffbefd2b5415c"
+    }
+  ],
+  "services": [
+    {
+      "binding": "NATIVE_LEDGER",
+      "service": "hidotpay-native-ledger-staging"
+    }
+  ]
+}
