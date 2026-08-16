@@ -146,7 +146,8 @@ test('uses the production Logto verifier and never accepts test actor headers in
   assert.match(source, /LOGTO_ISSUER/);
   assert.match(source, /LOGTO_AUDIENCE/);
   assert.match(source, /Object\.fromEntries\(headers\.entries\(\)\)/);
-  assert.doesNotMatch(source, /x-actor-id|developmentApiKey/);
+  assert.match(source, /headers\.get\('x-actor-id'\).*throw new DomainError\('unauthenticated'\)/);
+  assert.doesNotMatch(source, /developmentApiKey/);
 });
 
 test('builds read-only wallet access only from the Hyperdrive binding and closes each database pool', () => {
