@@ -1,5 +1,11 @@
 # 更新紀錄
 
+## 0.2.69 — 2026-08-16
+
+- 站內轉帳可轉已入帳的 USDT／USDC／BTC／XRP，不再寫死 USDT。
+- Polygon Amoy、Arbitrum Sepolia、Optimism Sepolia、Linea Sepolia 改掃 Circle 官方測試 USDC 並入帳。BNB、Scroll、TON 測試網仍只給地址：Circle／Tether 沒有已驗證的公開測試合約，且 TON 還沒有 jetton 掃描器。
+- 錢包補上提領畫面；原生帳本 `POST /v1/me/withdrawals` 一律回 `withdrawals_disabled`，不凍結、不簽名。`WITHDRAWALS_ENABLED` 維持關閉。這不是主網出金。
+
 ## 0.2.68 — 2026-08-16
 
 - 未登入引導與登入頁標明「測試網預覽」，並寫清楚不得轉入主網資產。這是受邀測試用戶可開的預覽，不是主網託管上線。

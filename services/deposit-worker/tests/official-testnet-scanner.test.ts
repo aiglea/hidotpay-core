@@ -27,6 +27,12 @@ test('staging scanner is pinned to public official testnet RPCs and rejects main
   assert.deepEqual(sepolia?.rpcUrls, PUBLIC_TESTNET_RPCS['ethereum-sepolia']);
   assert.ok(config.evmNetworks.some((network) => network.network === 'base-sepolia'));
   assert.ok(config.evmNetworks.some((network) => network.network === 'avalanche-fuji'));
+  assert.ok(config.evmNetworks.some((network) => network.network === 'polygon-amoy'));
+  assert.ok(config.evmNetworks.some((network) => network.network === 'arbitrum-sepolia'));
+  assert.ok(config.evmNetworks.some((network) => network.network === 'optimism-sepolia'));
+  assert.ok(config.evmNetworks.some((network) => network.network === 'linea-sepolia'));
+  assert.equal(config.evmNetworks.some((network) => network.network === 'bnb-testnet'), false);
+  assert.equal(config.evmNetworks.some((network) => network.network === 'scroll-sepolia'), false);
   assert.equal(config.tronNetworks[0]?.network, 'tron-shasta');
   assert.deepEqual(config.tronNetworks[0]?.rpcUrls, PUBLIC_TESTNET_RPCS['tron-shasta']);
   assert.ok(config.tronNetworks[0]?.apiKey.length >= 16);

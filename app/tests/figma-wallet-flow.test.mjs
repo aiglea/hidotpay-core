@@ -30,5 +30,8 @@ test('Figma 錢包首頁提供第一版 15 條鏈的真實充值流程', () => {
   assert.match(home, /topup-confirmation/);
   assert.match(home, /submitInternalTransfer/);
   assert.match(home, /send-confirm/);
+  assert.match(home, /transferAsset/);
+  assert.match(home, /requestWithdrawal/);
+  assert.match(home, /提領尚未開放/);
   assert.doesNotMatch(home, /\$12,765\.00|0x1234abcd|T[A-Z0-9]{33}/);
 });

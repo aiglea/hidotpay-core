@@ -16,7 +16,11 @@
 | 網路 | chain id / 識別 | RPC（依序 failover） |
 | --- | --- | --- |
 | `ethereum-sepolia` | 11155111 | `https://ethereum-sepolia-rpc.publicnode.com`、`https://1rpc.io/sepolia`、`https://gateway.tenderly.co/public/sepolia` |
+| `polygon-amoy` | 80002 | `https://polygon-amoy-bor-rpc.publicnode.com` |
+| `arbitrum-sepolia` | 421614 | `https://arbitrum-sepolia-rpc.publicnode.com` |
+| `optimism-sepolia` | 11155420 | `https://optimism-sepolia-rpc.publicnode.com`、`https://sepolia.optimism.io` |
 | `base-sepolia` | 84532 | `https://base-sepolia-rpc.publicnode.com`、`https://sepolia.base.org` |
+| `linea-sepolia` | 59141 | `https://linea-sepolia-rpc.publicnode.com`、`https://rpc.sepolia.linea.build` |
 | `avalanche-fuji` | 43113 | `https://avalanche-fuji-c-chain-rpc.publicnode.com`、`https://api.avax-test.network/ext/bc/C/rpc` |
 | `tron-shasta` | genesis `0000000000000000de1aa88295e1fcf982742f773e0419c5a9c134c994a9059e` | `https://api.shasta.trongrid.io` |
 | `bitcoin-testnet4` | testnet4 | `https://mempool.space/testnet4/api` |
@@ -33,13 +37,17 @@
 | ethereum-sepolia | USDT | `0x7169D38820dfd117C3FA1f22a697dBA58d90BA06` | 12 |
 | tron-shasta | USDT | `TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj` | 19 |
 | avalanche-fuji | USDT | `0xAb231A5744C8E6c45481754928cCfFFFD4aa0732` | 12 |
+| polygon-amoy | USDC | `0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582` | 64 |
+| arbitrum-sepolia | USDC | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` | 20 |
+| optimism-sepolia | USDC | `0x5fd84259d66Cd46123540766Be93DFE6D43130D7` | 20 |
+| linea-sepolia | USDC | `0xFEce4462D57bD51A6A552365A011b95f0E16d9B7` | 20 |
 | base-sepolia | USDC | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | 20 |
 | bitcoin-testnet4 | BTC | `native:btc` | 3 |
 | solana-devnet | USDC | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` | 32 |
 | xrpl-testnet | XRP | `native:xrp` | 1 |
 | stellar-testnet | USDC | `USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5` | 1 |
 
-Sepolia／Fuji 上的 USDT **不是** Tether 官方發行。Base／Solana／Stellar 用的是 Circle 官方測試 USDC。BNB、Polygon、Arbitrum、Optimism、Linea、Scroll、TON 測試網可配置地址，但沒有已驗證的公開測試 USDT，掃描器不會為它們入帳。主網合約不會被入帳。
+Sepolia／Fuji 上的 USDT **不是** Tether 官方發行。Amoy／Arbitrum／OP／Linea／Base／Solana／Stellar 用的是 Circle 官方測試 USDC（https://developers.circle.com/stablecoins/usdc-contract-addresses）。BNB、Scroll、TON 測試網可配置地址，但沒有發行方已驗證的公開測試合約，掃描器不會為它們入帳。主網合約不會被入帳。
 
 已配置為 `ethereum`／`tron` 的舊地址仍會被當成 Sepolia／Shasta 別名掃描；新地址使用官方測試網名稱。
 

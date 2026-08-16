@@ -186,3 +186,48 @@ test('站內轉帳使用冪等鍵且不把收款方放進網址', async () => {
   assert.equal(requests[0].init.headers['Idempotency-Key'], 'app-transfer-request-12345678');
   assert.equal(JSON.parse(requests[0].init.body).recipient_wallet_id, '7cc7c58e-3837-4381-bbdf-3248c97051fa');
 });
+
+test('站內轉帳可指定已入帳資產，不只限 USDT', async () => {
+  const { submitInternalTransfer } = await import('../src/wallet-api.ts');
+  const requests = [];
+
+  await submitInternalTransfer({
+    accessToken: 'signed-in-token',
+    amountAtoms: '250000',
+    apiBaseUrl: 'https://ledger.example.test',
+    assetCode: 'USDC',
+    fetchImpl: async (url, init) => {
+      requests.push({ init, url });
+      return Response.json({ status: 'committed', transfer_id: 'transfer-usdc' }, { status: 201 });
+    },
+    idempotencyKey: 'app-transfer-usdc-12345678',
+    recipientWalletId: '7cc7c58e-3837-4381-bbdf-3248c97051fa',
+  });
+
+  assert.equal(JSON.parse(requests[0].init.body).asset_code, 'USDC');
+  assert.equal(JSON.parse(requests[0].init.body).amount_atoms, '250000');
+});
+
+test('提領 API 把 withdrawals_disabled 顯示成尚未開放，且不會當成成功', async () => {
+  const { requestWithdrawal } = await import('../src/wallet-api.ts');
+  const requests = [];
+
+  await assert.rejects(
+    () => requestWithdrawal({
+      accessToken: 'signed-in-token',
+      amountAtoms: '1000000',
+      apiBaseUrl: 'https://ledger.example.test',
+      assetCode: 'USDT',
+      destinationAddress: '0x1111111111111111111111111111111111111111',
+      fetchImpl: async (url, init) => {
+        requests.push({ init, url });
+        return Response.json({ code: 'withdrawals_disabled', message: '請求無法處理' }, { status: 403 });
+      },
+      idempotencyKey: 'app-withdraw-12345678',
+      network: 'ethereum-sepolia',
+    }),
+    /提領尚未開放/,
+  );
+  assert.equal(requests[0].url, 'https://ledger.example.test/v1/me/withdrawals');
+  assert.equal(requests[0].init.method, 'POST');
+});

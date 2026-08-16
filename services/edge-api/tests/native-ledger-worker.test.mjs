@@ -434,6 +434,28 @@ test('an invalid internal-transfer idempotency key cannot provision a wallet or 
   assert.equal(transferCalls, 0);
 });
 
+test('native withdrawal create is always disabled and never reaches a ledger write', async () => {
+  assert.equal(typeof nativeRuntime.createDisabledWithdrawalRouter, 'function');
+  const router = nativeRuntime.createDisabledWithdrawalRouter();
+  await assert.rejects(
+    () => router.handle(new Request('https://wallet.example/v1/me/withdrawals', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': 'withdrawal-001' },
+      body: JSON.stringify({
+        amount_atoms: '1000000',
+        asset_code: 'USDT',
+        destination_address: '0x1111111111111111111111111111111111111111',
+        network: 'ethereum-sepolia',
+      }),
+    }), { id: 'actor-001', roles: [] }),
+    (error) => error instanceof DomainError && error.code === 'withdrawals_disabled',
+  );
+  const runtime = readFileSync(new URL('../src/native-ledger-runtime.ts', import.meta.url), 'utf8');
+  assert.match(runtime, /createDisabledWithdrawalRouter/);
+  assert.match(runtime, /\/v1\/me\/withdrawals/);
+  assert.doesNotMatch(runtime, /requestWithdrawal\(/);
+});
+
 test('withdrawal fee quote is bound to the authenticated actor and uses the configured fee policy', async () => {
   assert.equal(typeof nativeRuntime.createWithdrawalFeeQuoteRouter, 'function');
   const quoteCalls = [];

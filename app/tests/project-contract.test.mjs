@@ -69,13 +69,16 @@ test('錢包首頁在桌面與窄螢幕可捲動，不會截斷充值流程', ()
   assert.match(walletHome, /page: \{[^}]*overflow: 'hidden'/);
 });
 
-test('站內轉帳只轉給另一個 hidotpay 錢包，不會從 App 提領或做 P2P', () => {
+test('站內轉帳只轉給另一個 hidotpay 錢包，提領保持失敗關閉，不做 P2P', () => {
   const walletHome = read('src/WalletHome.tsx');
   assert.match(walletHome, /submitInternalTransfer/);
   assert.match(walletHome, /收款錢包編號/);
   assert.match(walletHome, /檢查轉帳內容/);
   assert.match(walletHome, /確認轉出/);
   assert.match(walletHome, /不能轉帳給自己的錢包/);
+  assert.match(walletHome, /assetCode: transferAsset/);
+  assert.match(walletHome, /requestWithdrawal/);
+  assert.match(walletHome, /提領尚未開放/);
   assert.doesNotMatch(walletHome, /p2p|P2P|提領即將開放|轉帳即將開放/i);
 });
 

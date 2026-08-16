@@ -18,6 +18,7 @@ const p2pPaymentMethodsMigrationPath = fileURLToPath(new URL('../migrations/016_
 const p2pConstraintRepairMigrationPath = fileURLToPath(new URL('../migrations/017_repair_p2p_constraint_names.sql', import.meta.url));
 const officialTestnetDepositPolicyPath = fileURLToPath(new URL('../migrations/018_official_testnet_deposit_policy.sql', import.meta.url));
 const v1ProductTestnetChainsPath = fileURLToPath(new URL('../migrations/019_v1_product_testnet_chains.sql', import.meta.url));
+const circleTestUsdcCreditPath = fileURLToPath(new URL('../migrations/020_circle_test_usdc_credit.sql', import.meta.url));
 
 test('financial migration contains no destructive DDL and creates the immutable journal', () => {
   const sql = readFileSync(migrationPath, 'utf8');
@@ -177,4 +178,18 @@ test('V1 product testnet migration adds the remaining first-version chains witho
   assert.match(sql, /'xrpl-testnet', 'xrp', 'xrpl-testnet'/);
   assert.match(sql, /'stellar-testnet', 'stellar', 'stellar-testnet'/);
   assert.doesNotMatch(sql, /ethereum-mainnet|0xdAC17F958D2ee523a2206206994597C13D831ec7|TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t/);
+});
+
+test('Circle test USDC credit migration enables only issuer-documented testnets', () => {
+  const sql = readFileSync(circleTestUsdcCreditPath, 'utf8');
+  assert.doesNotMatch(sql, /\b(DROP|DELETE|TRUNCATE)\s+(TABLE|DATABASE|SCHEMA)\b/i);
+  assert.match(sql, /0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582/);
+  assert.match(sql, /0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d/);
+  assert.match(sql, /0x5fd84259d66Cd46123540766Be93DFE6D43130D7/);
+  assert.match(sql, /0xFEce4462D57bD51A6A552365A011b95f0E16d9B7/);
+  assert.match(sql, /polygon-amoy/);
+  assert.match(sql, /arbitrum-sepolia/);
+  assert.match(sql, /optimism-sepolia/);
+  assert.match(sql, /linea-sepolia/);
+  assert.doesNotMatch(sql, /bnb-testnet|scroll-sepolia|ton-testnet|ethereum-mainnet|0xdAC17F|0xA0b86991|TR7NHq/);
 });

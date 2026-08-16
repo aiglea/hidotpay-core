@@ -335,6 +335,18 @@ export function createInternalTransferRouter(repository: InternalTransferReposit
   };
 }
 
+export function createDisabledWithdrawalRouter(): NativeLedgerRuntime<Actor> {
+  return {
+    async handle(request: Request): Promise<Response> {
+      const pathname = new URL(request.url).pathname;
+      if (request.method !== 'POST' || (pathname !== '/v1/me/withdrawals' && pathname !== '/v1/withdrawals')) {
+        return new Response('Not Found', { status: 404 });
+      }
+      throw new DomainError('withdrawals_disabled');
+    },
+  };
+}
+
 export function createWithdrawalFeeQuoteRouter(
   repository: WithdrawalFeeQuoteRepository,
   withdrawalFeePolicy: WithdrawalFeePolicy,
@@ -624,6 +636,9 @@ export function createNativeLedgerRuntime(env: NativeLedgerRuntimeEnv): NativeLe
         const pathname = new URL(request.url).pathname;
         if (request.method === 'POST' && (pathname === '/v1/me/internal-transfers' || pathname === '/v1/internal-transfers')) {
           return await createInternalTransferRouter(repository).handle(request, actor);
+        }
+        if (request.method === 'POST' && (pathname === '/v1/me/withdrawals' || pathname === '/v1/withdrawals')) {
+          return await createDisabledWithdrawalRouter().handle(request, actor);
         }
         if (request.method === 'POST' && pathname === '/v1/withdrawal-fee-quotes') {
           return await createWithdrawalFeeQuoteRouter(repository, withdrawalFeePolicyFromEnv(env.WITHDRAWAL_FEE_SCHEDULE)).handle(request, actor);

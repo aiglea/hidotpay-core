@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   V1_PRODUCT_CHAINS,
   V1_TESTNET_NETWORKS,
+  creditLiveChains,
   officialTestnetDepositNetworks,
 } from '../../src/domain/product-chains.js';
 
@@ -62,4 +63,17 @@ test('official testnet credit allow-list is exactly the V1 testnets and never in
   for (const network of officialTestnetDepositNetworks()) {
     assert.doesNotMatch(network, /mainnet/);
   }
+});
+
+test('Circle official test USDC is credit-live on Amoy, Arbitrum, OP and Linea Sepolia', () => {
+  const live = Object.fromEntries(creditLiveChains().map((chain) => [chain.testnet, chain]));
+  assert.equal(live['polygon-amoy']?.assetCode, 'USDC');
+  assert.equal(live['polygon-amoy']?.testnetContract, '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582');
+  assert.equal(live['arbitrum-sepolia']?.testnetContract, '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d');
+  assert.equal(live['optimism-sepolia']?.testnetContract, '0x5fd84259d66Cd46123540766Be93DFE6D43130D7');
+  assert.equal(live['linea-sepolia']?.testnetContract, '0xFEce4462D57bD51A6A552365A011b95f0E16d9B7');
+  for (const network of ['bnb-testnet', 'scroll-sepolia', 'ton-testnet']) {
+    assert.equal(live[network], undefined);
+  }
+  assert.doesNotMatch(creditLiveChains().map((chain) => chain.testnetContract).join(' '), /0xdAC17F|0xA0b86991|TR7NHq/i);
 });

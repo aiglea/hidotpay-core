@@ -41,6 +41,14 @@ export type InternalTransferRequest = WalletApiInput & {
   recipientWalletId: string;
 };
 
+export type WithdrawalRequest = WalletApiInput & {
+  amountAtoms: string;
+  assetCode: string;
+  destinationAddress: string;
+  idempotencyKey: string;
+  network: string;
+};
+
 function normalizedBaseUrl(apiBaseUrl: string): string {
   const value = apiBaseUrl.trim().replace(/\/+$/, '');
   let url: URL;
@@ -158,4 +166,26 @@ export async function submitInternalTransfer(input: InternalTransferRequest): Pr
 
   if (response.status !== 'committed' || !response.transfer_id) throw new Error('站內轉帳沒有完成，請稍後再試。');
   return { transferId: response.transfer_id };
+}
+
+export async function requestWithdrawal(input: WithdrawalRequest): Promise<never> {
+  await requestJson(
+    input,
+    '/v1/me/withdrawals',
+    {
+      body: JSON.stringify({
+        amount_atoms: input.amountAtoms,
+        asset_code: input.assetCode,
+        destination_address: input.destinationAddress,
+        network: input.network,
+      }),
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': input.idempotencyKey },
+      method: 'POST',
+    },
+    '提領尚未開放。沒有正式簽名器前，不能把資產轉出平台。',
+    {
+      withdrawals_disabled: '提領尚未開放。沒有正式簽名器前，不能把資產轉出平台。',
+    },
+  );
+  throw new Error('提領尚未開放。沒有正式簽名器前，不能把資產轉出平台。');
 }
