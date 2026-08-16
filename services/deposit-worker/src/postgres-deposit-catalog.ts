@@ -1,9 +1,25 @@
 import type { DepositTarget } from './scanner.js';
 
+const ADDRESS_ALIASES: Record<string, string[]> = {
+  'arbitrum-sepolia': ['arbitrum-sepolia', 'arbitrum'],
+  'avalanche-fuji': ['avalanche-fuji', 'avalanche'],
+  'base-sepolia': ['base-sepolia', 'base'],
+  'bitcoin-testnet4': ['bitcoin-testnet4', 'bitcoin'],
+  'bnb-testnet': ['bnb-testnet', 'bnb', 'bsc'],
+  'ethereum-sepolia': ['ethereum-sepolia', 'ethereum'],
+  'linea-sepolia': ['linea-sepolia', 'linea'],
+  'optimism-sepolia': ['optimism-sepolia', 'optimism'],
+  'polygon-amoy': ['polygon-amoy', 'polygon'],
+  'scroll-sepolia': ['scroll-sepolia', 'scroll'],
+  'solana-devnet': ['solana-devnet', 'solana'],
+  'stellar-testnet': ['stellar-testnet', 'stellar', 'xlm'],
+  'ton-testnet': ['ton-testnet', 'ton'],
+  'tron-shasta': ['tron-shasta', 'tron'],
+  'xrpl-testnet': ['xrpl-testnet', 'xrp', 'xrpl'],
+};
+
 function addressNetworksFor(network: string): string[] {
-  if (network === 'ethereum-sepolia') return ['ethereum-sepolia', 'ethereum'];
-  if (network === 'tron-shasta') return ['tron-shasta', 'tron'];
-  return [network];
+  return ADDRESS_ALIASES[network] ?? [network];
 }
 
 type Queryable = { query<T extends Record<string, unknown>>(sql: string, values: unknown[]): Promise<{ rows: T[] }> };

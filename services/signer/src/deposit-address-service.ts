@@ -94,8 +94,35 @@ export class DepositAddressService {
   }
 
   private matchesNetworkAddress(network: string, address: string): boolean {
-    if (network === 'ethereum' || network.startsWith('ethereum-')) return /^0x[0-9a-f]{40}$/i.test(address);
+    if (isEvmLike(network)) return /^0x[0-9a-f]{40}$/i.test(address);
     if (network === 'tron' || network.startsWith('tron-')) return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
+    if (network === 'bitcoin' || network.startsWith('bitcoin-')) return /^tb1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{25,62}$/.test(address);
+    if (network === 'xrp' || network === 'xrpl' || network.startsWith('xrpl-')) return /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(address);
+    if (network === 'solana' || network.startsWith('solana-')) return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+    if (network === 'ton' || network.startsWith('ton-')) return /^(EQ|UQ|kQ|0Q)[A-Za-z0-9_-]{46}$/.test(address);
+    if (network === 'stellar' || network === 'xlm' || network.startsWith('stellar-')) return /^G[A-Z2-7]{55}$/.test(address);
     return false;
   }
+}
+
+function isEvmLike(network: string): boolean {
+  return network === 'ethereum'
+    || network.startsWith('ethereum-')
+    || network === 'bnb'
+    || network === 'bsc'
+    || network.startsWith('bnb-')
+    || network === 'polygon'
+    || network.startsWith('polygon-')
+    || network === 'arbitrum'
+    || network.startsWith('arbitrum-')
+    || network === 'optimism'
+    || network.startsWith('optimism-')
+    || network === 'base'
+    || network.startsWith('base-')
+    || network === 'avalanche'
+    || network.startsWith('avalanche-')
+    || network === 'linea'
+    || network.startsWith('linea-')
+    || network === 'scroll'
+    || network.startsWith('scroll-');
 }

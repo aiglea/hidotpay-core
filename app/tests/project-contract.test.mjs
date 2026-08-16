@@ -85,7 +85,7 @@ test('交易紀錄只顯示安全欄位，並涵蓋載入、空白、失敗重�
   assert.match(walletHome, /正在讀取交易紀錄/);
   assert.match(walletHome, /尚無交易紀錄/);
   assert.match(walletHome, /等待第一筆測試網充值確認入帳/);
-  assert.match(walletHome, /Sepolia／Shasta 測試 USDT/);
+  assert.match(walletHome, /對應測試網資產/);
   assert.match(walletHome, /重新載入/);
   assert.match(walletHome, /載入更多/);
   assert.match(walletHome, /nextCursor/);

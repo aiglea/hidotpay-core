@@ -1,5 +1,11 @@
 # 更新紀錄
 
+## 0.2.67 — 2026-08-16
+
+- 依 `wallet_security_plan.md` §21 第一版清單補齊 15 條產品鏈：Ethereum、BNB Chain、Polygon、Arbitrum、Optimism、Base、Avalanche C-Chain、Linea、Scroll、TRON、Bitcoin、Solana、TON、XRP Ledger、Stellar。錢包可為每一條鏈配置真實充值地址；主網與提領維持關閉。
+- 已驗證測試資產可掃描入帳：Ethereum Sepolia USDT、TRON Shasta USDT、Avalanche Fuji 測試 USDT、Base Sepolia Circle USDC、Bitcoin Testnet4 原生 BTC、XRP Ledger Testnet 原生 XRP、Solana Devnet Circle USDC、Stellar Testnet Circle USDC。
+- BNB／Polygon／Arbitrum／Optimism／Linea／Scroll／TON 測試網可取得地址，但公開網路沒有已驗證的測試 USDT，轉入不會入帳。這不是企業級託管，也不能保管真實資產。
+
 ## 0.2.66 — 2026-08-16
 
 - 原生帳本補上受保護的測試網入帳路徑 `POST /v1/deposits/confirmed`：只接受 `CHAIN_OPERATOR_TOKEN` 服務身分，拒絕使用者 JWT、`x-actor-id` 與瀏覽器 Origin；主網與非正式網路在寫入前拒絕；同一筆鏈上觀測重送不會重複入帳。

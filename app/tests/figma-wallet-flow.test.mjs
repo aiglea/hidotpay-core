@@ -16,11 +16,16 @@ test('Figma 錢包引導提供登入、建立帳戶與安全的非帳密入口',
   assert.doesNotMatch(`${flow}\n${shell}`, /TextInput[\s\S]{0,120}(密碼|password)|(密碼|password)[\s\S]{0,120}TextInput/i);
 });
 
-test('Figma 錢包首頁僅提供 Ethereum 與 TRON 的真實充值流程', () => {
+test('Figma 錢包首頁提供第一版 15 條鏈的真實充值流程', () => {
   const home = source('src/WalletHome.tsx');
+  const networks = source('src/product-networks.ts');
 
-  assert.match(home, /'ethereum-sepolia'/);
-  assert.match(home, /'tron-shasta'/);
+  for (const network of [
+    'ethereum-sepolia', 'bnb-testnet', 'polygon-amoy', 'arbitrum-sepolia', 'optimism-sepolia',
+    'base-sepolia', 'avalanche-fuji', 'linea-sepolia', 'scroll-sepolia', 'tron-shasta',
+    'bitcoin-testnet4', 'solana-devnet', 'ton-testnet', 'xrpl-testnet', 'stellar-testnet',
+  ]) assert.match(networks, new RegExp(`id: '${network}'`));
+  assert.match(home, /WALLET_NETWORKS/);
   assert.match(home, /allocateDepositAddress/);
   assert.match(home, /topup-confirmation/);
   assert.match(home, /submitInternalTransfer/);

@@ -1,13 +1,19 @@
+import { SIGNER_ALLOWED_NETWORKS } from './product-networks.js';
 import { DepositAddressService } from './deposit-address-service.js';
 import { DomainError } from './domain-errors.js';
 import { PrivateSignerHttpHandler } from './private-signer-http.js';
+import { loadPublicAddressTable, PublicAddressTableBackend } from './public-address-table.js';
+import { RoutingDepositBackend } from './routing-deposit-backend.js';
 import { SignerPolicy, type SigningBackend } from './signer-policy.js';
 import { XpubDepositBackend } from './xpub-deposit-backend.js';
 
 export type DepositSignerEnv = {
+  BTC_ACCOUNT_XPUB: string;
   ETH_ACCOUNT_XPUB: string;
   SIGNER_SERVICE_TOKEN: string;
   TRON_ACCOUNT_XPUB: string;
+  XRP_ACCOUNT_XPUB: string;
+  [name: string]: string | undefined;
 };
 
 class WithdrawalsDisabledBackend implements SigningBackend {
@@ -17,15 +23,28 @@ class WithdrawalsDisabledBackend implements SigningBackend {
 }
 
 export function createDepositSignerWorker(env: DepositSignerEnv) {
+  const allowedNetworks = [...SIGNER_ALLOWED_NETWORKS];
   const handler = new PrivateSignerHttpHandler({
     addressService: new DepositAddressService({
-      allowedNetworks: ['ethereum', 'ethereum-sepolia', 'tron', 'tron-shasta'],
+      allowedNetworks,
       mainnetEnabled: false,
       trustedCaller: 'wallet-address-service',
-    }, new XpubDepositBackend({ ethereum: env.ETH_ACCOUNT_XPUB, tron: env.TRON_ACCOUNT_XPUB })),
+    }, new RoutingDepositBackend(
+      new XpubDepositBackend({
+        bitcoin: env.BTC_ACCOUNT_XPUB,
+        ethereum: env.ETH_ACCOUNT_XPUB,
+        tron: env.TRON_ACCOUNT_XPUB,
+        xrp: env.XRP_ACCOUNT_XPUB,
+      }),
+      new PublicAddressTableBackend({
+        solana: loadPublicAddressTable(env, 'SOL_ADDRESS_TABLE'),
+        stellar: loadPublicAddressTable(env, 'XLM_ADDRESS_TABLE'),
+        ton: loadPublicAddressTable(env, 'TON_ADDRESS_TABLE'),
+      }),
+    )),
     serviceToken: env.SIGNER_SERVICE_TOKEN,
     signingPolicy: new SignerPolicy({
-      allowedNetworks: ['ethereum', 'ethereum-sepolia', 'tron', 'tron-shasta'],
+      allowedNetworks,
       mainnetEnabled: false,
       maxWithdrawalAtoms: '1',
       trustedCaller: 'withdrawal-worker',

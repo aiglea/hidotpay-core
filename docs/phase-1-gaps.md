@@ -1,7 +1,7 @@
 # 第一階段完成度與正式上線缺口
 
 更新日期：2026-08-16
-適用版本：0.2.66
+適用版本：0.2.67
 
 這份表把「程式已完成並驗證」和「外部環境已正式驗收」分開。任何標示為外部驗收未完成的項目，都表示不能開啟真實資產充值或提現。沒有第二人、沒有付費的 HSM／多區叢集，就不能宣稱「已可保管真實資產」。
 
@@ -12,15 +12,15 @@
 | 帳戶登入與公開 API 身分邊界 | Logto token 必須符合簽發者與 API 對象；未登入請求不會建立錢包或連資料庫 | `services/ledger-api/tests/http/auth.test.ts`、`services/edge-api/tests/native-ledger-worker.test.mjs` |
 | 不可變帳本 | 站內轉帳、充值、提現凍結與 P2P 託管均以平衡分錄保存；一般帳戶不可為負 | `services/ledger-api/tests/integration/transfer-repository.test.ts` |
 | 獨立充值地址 | 同一使用者同一鏈得到穩定地址；不同使用者不共用；併發不會重複配置 | `services/ledger-api/tests/integration/wallet-addresses.test.ts` |
-| 隔離充值簽名器 | 帳本只向簽名器索取公開地址；簽名器只持有 Ethereum／TRON account xpub；失敗回傳 `signer_unavailable`／`signer_rejected`，不含秘密 | `services/signer/tests/deposit-signer-worker.test.ts`、`services/ledger-api/tests/integrations/signer-address-deriver.test.ts`、`app/tests/wallet-api.test.mjs` |
-| 多鏈充值觀測 | EVM 與 TRON 只處理已啟用官方資產，並依確認門檻、游標、重組視窗與事件去重入帳；掃描器只前進到安全水位，深度重組及歷史 `orphaned + receipt` 一律失敗關閉 | `services/deposit-worker/tests/*.test.ts`、`docs/operations/deposit-reorg-response.md` |
+| 隔離充值簽名器 | 帳本只向簽名器索取公開地址；EVM／TRON／Bitcoin／XRP 用 account xpub，Solana／TON／Stellar 用鑰匙圈預先派生的公開地址表；失敗回傳 `signer_unavailable`／`signer_rejected`，不含秘密 | `services/signer/tests/deposit-signer-worker.test.ts`、`services/signer/tests/xpub-deposit-backend.test.ts`、`services/signer/tests/public-address-table.test.ts` |
+| 多鏈充值觀測 | 已驗證測試資產（Sepolia／Shasta／Fuji USDT、Base／Solana／Stellar USDC、Bitcoin Testnet4 BTC、XRPL XRP）依確認門檻、游標、重組視窗與事件去重入帳；無已驗證測試 USDT 的 EVM／TON 只配置地址、不入帳 | `services/deposit-worker/tests/*.test.ts`、`docs/operations/testnet-deposit-scanner.md` |
 | 站內免費轉帳 | 已驗證只能扣自己的可用餘額、可重送不重扣、不會產生鏈上簽名或 gas | `services/ledger-api/tests/http/internal-transfers.test.ts` |
 | 提現保護規則 | 預設拒絕提現；手續費報價、白名單冷卻、日限額、單筆限額與凍結規則已受測試覆蓋 | `services/ledger-api/tests/services/risk-service.test.ts`、`services/withdrawal-worker/tests/withdrawal-execution.test.ts` |
 | P2P 託管 | 廣告、下單、鎖定、買家付款、賣家放幣、逾時退款、爭議仲裁和付款資訊遮罩均有角色與帳本測試 | `services/ledger-api/tests/http/p2p-orders.test.ts`、`services/ledger-api/tests/integration/p2p-order-repository.test.ts` |
 | 可靠事件與工作流 | Outbox、Redpanda publisher、Temporal 工作流與 Blnk 對帳的重試／去重行為已測試 | `services/outbox-publisher/tests/*.test.ts`、`services/workflows/tests/*.test.ts`、`services/reconciliation-worker/tests/*.test.ts` |
 | 低代碼後台唯讀投影 | 投影工作者只能讀指定 `admin_*` 檢視表並寫入可重建後台資料；實測投影服務不能讀取資料或使用者，財務檢視者不能寫入 | `services/admin-read-model-worker/tests/*.test.ts`、`deployment/nocobase/read-model-role.test.mjs`、`deployment/nocobase/smoke-read-model.sh` |
 | 測試網入帳路徑 | 原生 Worker 有 fail-closed 的 `POST /v1/deposits/confirmed`：只接受 `CHAIN_OPERATOR_TOKEN` 服務身分，拒絕終端使用者 JWT、`x-actor-id` 與瀏覽器 Origin；主網與非正式網路在寫入前拒絕；同一觀測重送不重複入帳 | `services/edge-api/tests/native-deposit-credit.test.mjs`、`services/ledger-api/tests/services/funding-service-deposit.test.ts` |
-| CockroachDB 遷移安全 | 空白資料庫已完成 18 個 migration（含官方 Sepolia／Shasta USDT 政策種子）；線上欄位回填採逐條執行且可安全重跑；專用測試帳號獲得既有和日後 migration 資料表權限 | `services/ledger-api/tests/migration-runner.test.ts`、`services/ledger-api/tests/migrations.test.ts`、`services/ledger-api/tests/test-database-privileges.test.ts` |
+| CockroachDB 遷移安全 | 空白資料庫已完成 19 個 migration（含第一版 15 條產品鏈測試網目錄與已驗證測試資產）；線上欄位回填採逐條執行且可安全重跑；專用測試帳號獲得既有和日後 migration 資料表權限 | `services/ledger-api/tests/migration-runner.test.ts`、`services/ledger-api/tests/migrations.test.ts`、`services/ledger-api/tests/test-database-privileges.test.ts` |
 
 ## 已部署、但仍是封閉候選環境的項目
 
@@ -28,8 +28,8 @@
 | --- | --- | --- |
 | 錢包 UI | `hidotpay-wallet-ui` 已部署；登入走 Logto；失效 refresh token 會清掉本機登入；空餘額會說明等待第一筆測試網入帳 | 這是測試網錢包，不是主網。P2P 前台未接 |
 | 原生帳本 Worker | `hidotpay-native-ledger-staging`：`/healthz` 200、未登入 401、`LEDGER_API_ENABLED=true`、`WITHDRAWALS_ENABLED=false`、已有 `/v1/deposits/confirmed` | 這是 staging／測試網候選，不是主網資金入口 |
-| 測試網掃描器 | `hidotpay-deposit-scanner-staging` 每分鐘掃描 Sepolia／Shasta 公開 RPC，經 service binding 入帳；無游標時錨在安全水位，不回補歷史 | 公開 RPC 可能限流或短暫失敗；沒有付費私有 RPC。Sepolia「USDT」不是 Tether 官方發行。尚未用真實測試幣走完一筆端到端入帳 |
-| 充值簽名器 | `hidotpay-deposit-signer-staging` 只回公開地址；帳本以 `DEPOSIT_SIGNER` service binding 呼叫，不走公網 | 持有的是 account xpub，不是 HSM。主種子只在操作者鑰匙圈。不能保管真實資產 |
+| 測試網掃描器 | `hidotpay-deposit-scanner-staging` 每分鐘掃描已驗證測試網公開 RPC，經 service binding 入帳；無游標時錨在安全水位，不回補歷史 | 公開 RPC 可能限流或短暫失敗。BNB／Polygon／Arbitrum／Optimism／Linea／Scroll／TON 沒有已驗證測試 USDT，只給地址。尚未用真實測試幣走完每一條鏈的端到端入帳 |
+| 充值簽名器 | `hidotpay-deposit-signer-staging` 只回公開地址；帳本以 `DEPOSIT_SIGNER` service binding 呼叫，不走公網。Solana／TON／Stellar 的公開地址表因 Cloudflare 單一 secret 上限 5.1 kB，分成多個 `*_ADDRESS_TABLE_N` 文字綁定 | 持有的是 account xpub 與公開地址表，不是 HSM。主種子只在操作者鑰匙圈。不能保管真實資產 |
 | CockroachDB Cloud | 已有隔離測試／staging 資料庫；本機投影工作者可讀 `admin_*` 檢視 | 尚未取得多區域正式集群、備份與還原演練證據 |
 | NocoBase | 本機 `http://127.0.0.1:13000` Compose 健康；管理者可登入；六個投影集合與財務唯讀角色可重跑；投影一次成功 | 私有開發後台。尚未 VPN／HTTPS 正式網路、雲端密鑰服務、備份還原與第二人驗收 |
 | Blnk | 本機私有部署與受限服務金鑰流程已準備 | 尚未有多副本、私有網路、備份還原與 CockroachDB 實際抽樣對帳證據 |

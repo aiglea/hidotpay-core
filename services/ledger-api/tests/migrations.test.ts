@@ -17,6 +17,7 @@ const p2pTimeoutMigrationPath = fileURLToPath(new URL('../migrations/015_p2p_pay
 const p2pPaymentMethodsMigrationPath = fileURLToPath(new URL('../migrations/016_p2p_payment_methods.sql', import.meta.url));
 const p2pConstraintRepairMigrationPath = fileURLToPath(new URL('../migrations/017_repair_p2p_constraint_names.sql', import.meta.url));
 const officialTestnetDepositPolicyPath = fileURLToPath(new URL('../migrations/018_official_testnet_deposit_policy.sql', import.meta.url));
+const v1ProductTestnetChainsPath = fileURLToPath(new URL('../migrations/019_v1_product_testnet_chains.sql', import.meta.url));
 
 test('financial migration contains no destructive DDL and creates the immutable journal', () => {
   const sql = readFileSync(migrationPath, 'utf8');
@@ -158,4 +159,22 @@ test('official testnet deposit policy seeds only Sepolia and Shasta USDT', () =>
   assert.match(sql, /0x7169D38820dfd117C3FA1f22a697dBA58d90BA06/);
   assert.match(sql, /TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj/);
   assert.doesNotMatch(sql, /mainnet|0xdAC17F958D2ee523a2206206994597C13D831ec7|TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t/i);
+});
+
+test('V1 product testnet migration adds the remaining first-version chains without mainnet credit rows', () => {
+  const sql = readFileSync(v1ProductTestnetChainsPath, 'utf8');
+  assert.doesNotMatch(sql, /\b(DROP|DELETE|TRUNCATE)\s+(TABLE|DATABASE|SCHEMA)\b/i);
+  for (const network of [
+    'bnb-testnet', 'polygon-amoy', 'arbitrum-sepolia', 'optimism-sepolia', 'base-sepolia',
+    'avalanche-fuji', 'linea-sepolia', 'scroll-sepolia', 'bitcoin-testnet4', 'solana-devnet',
+    'ton-testnet', 'xrpl-testnet', 'stellar-testnet',
+  ]) assert.match(sql, new RegExp(network));
+  assert.match(sql, /native:btc/);
+  assert.match(sql, /native:xrp/);
+  assert.match(sql, /4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU/);
+  assert.match(sql, /GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5/);
+  assert.match(sql, /'ton-testnet', 'ton', 'ton-testnet'/);
+  assert.match(sql, /'xrpl-testnet', 'xrp', 'xrpl-testnet'/);
+  assert.match(sql, /'stellar-testnet', 'stellar', 'stellar-testnet'/);
+  assert.doesNotMatch(sql, /ethereum-mainnet|0xdAC17F958D2ee523a2206206994597C13D831ec7|TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t/);
 });

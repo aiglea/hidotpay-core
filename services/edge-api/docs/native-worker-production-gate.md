@@ -13,14 +13,11 @@
 
 - 錢包、餘額、內部轉帳與手續費報價
 - P2P 廣告、訂單、託管狀態動作、仲裁與收款方式
-- Ethereum／TRON 充值公開地址（經 `DEPOSIT_SIGNER` service binding）
+- 第一版 15 條鏈的充值公開地址（經 `DEPOSIT_SIGNER` service binding）
 
-原生 Worker 現在有受保護的 `POST /v1/deposits/confirmed`。此路徑**不接受**終端使用者 Logto JWT，也不接受 `x-actor-id`。呼叫者必須出示 Worker Secret `CHAIN_OPERATOR_TOKEN`（至少 16 字元，timing-safe 比對）。帶有瀏覽器 `Origin` 的請求一律 403。只接受官方測試網 `ethereum-sepolia` 與 `tron-shasta`；名稱含 `mainnet` 的網路在寫入帳本前拒絕。
+原生 Worker 現在有受保護的 `POST /v1/deposits/confirmed`。此路徑**不接受**終端使用者 Logto JWT，也不接受 `x-actor-id`。呼叫者必須出示 Worker Secret `CHAIN_OPERATOR_TOKEN`（至少 16 字元，timing-safe 比對）。帶有瀏覽器 `Origin` 的請求一律 403。只接受 `wallet_security_plan.md` §21 的第一版測試網名稱；名稱含 `mainnet` 的網路在寫入帳本前拒絕。
 
-測試網掃描由 `hidotpay-deposit-scanner-staging` 以 cron 呼叫此路徑。公開 RPC：
-
-- Ethereum Sepolia：`https://ethereum-sepolia-rpc.publicnode.com`、`https://1rpc.io/sepolia`、`https://gateway.tenderly.co/public/sepolia`
-- TRON Shasta：`https://api.shasta.trongrid.io`
+測試網掃描由 `hidotpay-deposit-scanner-staging` 以 cron 呼叫此路徑。已驗證入帳的公開 RPC 見 `docs/operations/testnet-deposit-scanner.md`。`ethereum-sepolia` 與 `tron-shasta` 仍在清單中，並已加上其餘第一版測試網。
 
 沒有游標時，掃描器會把游標錨在目前安全水位，不回補歷史區塊。這不是主網資金入口。
 

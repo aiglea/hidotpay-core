@@ -1,16 +1,21 @@
 import { Pool } from 'pg';
 
+import { BitcoinExplorerProvider } from './bitcoin-provider.js';
 import { bootstrapScanCursor } from './bootstrap-scan-cursor.js';
 import { EvmFailoverAdapter } from './evm-failover-adapter.js';
 import { EvmJsonRpcProvider } from './evm-rpc-provider.js';
 import { LedgerDepositCreditor } from './ledger-deposit-creditor.js';
+import { NamedChainAdapter } from './named-chain-adapter.js';
 import { loadOfficialTestnetScannerConfig } from './official-testnet-scanner.js';
 import { PostgresDepositCatalog } from './postgres-deposit-catalog.js';
 import { PostgresDepositScanStore } from './postgres-scan-store.js';
 import { runConfiguredNetwork } from './run-configured-network.js';
 import type { DepositChainAdapter } from './scanner.js';
+import { SolanaJsonRpcProvider } from './solana-provider.js';
+import { StellarHorizonProvider } from './stellar-provider.js';
 import { TronFailoverAdapter } from './tron-failover-adapter.js';
 import { TronSolidifiedProvider } from './tron-solidified-provider.js';
+import { XrplJsonRpcProvider } from './xrpl-provider.js';
 
 export type DepositScannerEnv = {
   CHAIN_OPERATOR_TOKEN?: string;
@@ -56,19 +61,31 @@ export async function scanOfficialTestnets(env: DepositScannerEnv): Promise<void
         network.genesisBlockHash,
         network.rpcUrls.map((url) => new TronSolidifiedProvider({ apiKey: network.apiKey, url })),
       )),
+      ...config.bitcoinNetworks.map((network) => new NamedChainAdapter(network.network, new BitcoinExplorerProvider({ url: network.rpcUrls[0]! }))),
+      ...config.xrplNetworks.map((network) => new NamedChainAdapter(network.network, new XrplJsonRpcProvider({ url: network.rpcUrls[0]! }))),
+      ...config.solanaNetworks.map((network) => new NamedChainAdapter(network.network, new SolanaJsonRpcProvider({ url: network.rpcUrls[0]! }))),
+      ...config.stellarNetworks.map((network) => new NamedChainAdapter(network.network, new StellarHorizonProvider({ url: network.rpcUrls[0]! }))),
     ];
+    const failures: string[] = [];
     for (const adapter of adapters) {
-      await bootstrapScanCursor({ adapter, reorgWindow: config.reorgWindow, store });
-      await runConfiguredNetwork({
-        adapter,
-        catalog,
-        creditor,
-        firstBlock: 0,
-        maxBlockRange: config.maxBlockRange,
-        reorgWindow: config.reorgWindow,
-        store,
-      });
+      try {
+        const policies = await catalog.policies(adapter.network);
+        if (policies.length === 0) continue;
+        await bootstrapScanCursor({ adapter, reorgWindow: config.reorgWindow, store });
+        await runConfiguredNetwork({
+          adapter,
+          catalog,
+          creditor,
+          firstBlock: 0,
+          maxBlockRange: config.maxBlockRange,
+          reorgWindow: config.reorgWindow,
+          store,
+        });
+      } catch (error) {
+        failures.push(`${adapter.network}: ${error instanceof Error ? error.message : 'unknown'}`);
+      }
     }
+    if (failures.length === adapters.length) throw new Error(`all deposit scanners failed: ${failures.join('; ')}`);
   } finally {
     await pool.end();
   }

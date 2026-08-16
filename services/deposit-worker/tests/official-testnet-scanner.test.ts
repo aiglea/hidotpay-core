@@ -22,12 +22,18 @@ test('staging scanner is pinned to public official testnet RPCs and rejects main
   const config = loadOfficialTestnetScannerConfig({
     CHAIN_OPERATOR_TOKEN: 'chain-operator-token-at-least-16',
   });
-  assert.equal(config.evmNetworks[0]?.network, 'ethereum-sepolia');
-  assert.equal(config.evmNetworks[0]?.chainId, 11155111);
-  assert.deepEqual(config.evmNetworks[0]?.rpcUrls, PUBLIC_TESTNET_RPCS['ethereum-sepolia']);
+  const sepolia = config.evmNetworks.find((network) => network.network === 'ethereum-sepolia');
+  assert.equal(sepolia?.chainId, 11155111);
+  assert.deepEqual(sepolia?.rpcUrls, PUBLIC_TESTNET_RPCS['ethereum-sepolia']);
+  assert.ok(config.evmNetworks.some((network) => network.network === 'base-sepolia'));
+  assert.ok(config.evmNetworks.some((network) => network.network === 'avalanche-fuji'));
   assert.equal(config.tronNetworks[0]?.network, 'tron-shasta');
   assert.deepEqual(config.tronNetworks[0]?.rpcUrls, PUBLIC_TESTNET_RPCS['tron-shasta']);
   assert.ok(config.tronNetworks[0]?.apiKey.length >= 16);
+  assert.deepEqual(config.bitcoinNetworks.map((network) => network.network), ['bitcoin-testnet4']);
+  assert.deepEqual(config.solanaNetworks.map((network) => network.network), ['solana-devnet']);
+  assert.deepEqual(config.stellarNetworks.map((network) => network.network), ['stellar-testnet']);
+  assert.deepEqual(config.xrplNetworks.map((network) => network.network), ['xrpl-testnet']);
   assert.equal(config.ledgerBearerToken, 'chain-operator-token-at-least-16');
 
   assert.throws(
