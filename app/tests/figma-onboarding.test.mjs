@@ -25,7 +25,7 @@ test('未登入首頁符合 Figma 引導版型且不顯示假餘額', () => {
   const source = read('src/OnboardingFlow.tsx');
   const shell = read('src/LoginShell.tsx');
 
-  for (const text of ['你的數位錢包', '略過', '開始使用', '登入', '建立帳戶']) {
+  for (const text of ['測試網預覽', '略過', '開始使用', '登入', '建立帳戶']) {
     assert.match(source, new RegExp(text));
   }
 
@@ -34,6 +34,8 @@ test('未登入首頁符合 Figma 引導版型且不顯示假餘額', () => {
   assert.match(source, /onSignUp/);
   assert.match(source, /disabled=\{busy\}/);
   assert.match(source, /ScrollView/);
+  assert.match(source, /測試網預覽/);
+  assert.match(source, /不得轉入主網資產/);
   assert.match(shell, /<OnboardingFlow/);
 });
 

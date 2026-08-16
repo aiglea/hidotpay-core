@@ -1,7 +1,7 @@
 # 第一階段完成度與正式上線缺口
 
 更新日期：2026-08-16
-適用版本：0.2.67
+適用版本：0.2.68
 
 這份表把「程式已完成並驗證」和「外部環境已正式驗收」分開。任何標示為外部驗收未完成的項目，都表示不能開啟真實資產充值或提現。沒有第二人、沒有付費的 HSM／多區叢集，就不能宣稱「已可保管真實資產」。
 
@@ -26,7 +26,7 @@
 
 | 項目 | 現況 | 為何尚不能當成正式資金環境 |
 | --- | --- | --- |
-| 錢包 UI | `hidotpay-wallet-ui` 已部署；登入走 Logto；失效 refresh token 會清掉本機登入；空餘額會說明等待第一筆測試網入帳 | 這是測試網錢包，不是主網。P2P 前台未接 |
+| 錢包 UI | `hidotpay-wallet-ui` 已部署；未登入頁標明測試網預覽與不得轉入主網；登入走 Logto；空餘額會說明等待第一筆測試網入帳 | 這是受邀測試網預覽，不是主網。P2P 前台未接 |
 | 原生帳本 Worker | `hidotpay-native-ledger-staging`：`/healthz` 200、未登入 401、`LEDGER_API_ENABLED=true`、`WITHDRAWALS_ENABLED=false`、已有 `/v1/deposits/confirmed` | 這是 staging／測試網候選，不是主網資金入口 |
 | 測試網掃描器 | `hidotpay-deposit-scanner-staging` 每分鐘掃描已驗證測試網公開 RPC，經 service binding 入帳；無游標時錨在安全水位，不回補歷史 | 公開 RPC 可能限流或短暫失敗。BNB／Polygon／Arbitrum／Optimism／Linea／Scroll／TON 沒有已驗證測試 USDT，只給地址。尚未用真實測試幣走完每一條鏈的端到端入帳 |
 | 充值簽名器 | `hidotpay-deposit-signer-staging` 只回公開地址；帳本以 `DEPOSIT_SIGNER` service binding 呼叫，不走公網。Solana／TON／Stellar 的公開地址表因 Cloudflare 單一 secret 上限 5.1 kB，分成多個 `*_ADDRESS_TABLE_N` 文字綁定 | 持有的是 account xpub 與公開地址表，不是 HSM。主種子只在操作者鑰匙圈。不能保管真實資產 |

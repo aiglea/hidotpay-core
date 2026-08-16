@@ -16,7 +16,7 @@ export function OnboardingFlow({ busy, error, onSignIn, onSignUp }: OnboardingFl
         <View style={styles.brandRow}><View style={figmaWalletShared.brandMark}><View style={figmaWalletShared.brandMarkCore} /></View><Text style={styles.wordmark}>hidotpay</Text></View>
         {screen === 'intro' ? <View style={styles.hero}>
           <View pointerEvents="none" style={styles.heroOrb}><View style={styles.heroOrbit} /><View style={styles.heroLine} /></View>
-          <Text style={styles.kicker}>你的數位錢包</Text><Text style={styles.heroTitle}>每一筆資產，{'\n'}都清楚掌握</Text><Text style={styles.heroBody}>以你的帳戶為中心，安全查看資產，並在支援的網路建立專屬充值地址。</Text>
+          <Text style={styles.kicker}>測試網預覽</Text><Text style={styles.heroTitle}>每一筆資產，{'\n'}都清楚掌握</Text><Text style={styles.heroBody}>以你的帳戶為中心，安全查看測試網資產，並在支援的網路建立專屬充值地址。不得轉入主網資產。</Text>
           <View accessibilityLabel="第 1 頁，共 2 頁" accessibilityRole="progressbar" style={styles.dots}><View style={[styles.dot, styles.dotActive]} /><View style={styles.dot} /></View>
           <Pressable accessibilityLabel="繼續引導" accessibilityRole="button" onPress={advance} style={({ pressed }) => [figmaWalletShared.button, pressed && figmaWalletShared.pressed]}><Text style={figmaWalletShared.buttonText}>繼續</Text></Pressable>
           <Pressable accessibilityLabel="略過引導" accessibilityRole="button" onPress={() => setScreen('auth')} style={({ pressed }) => [styles.textButton, pressed && figmaWalletShared.pressed]}><Text style={styles.textButtonText}>略過</Text></Pressable>
@@ -28,7 +28,7 @@ export function OnboardingFlow({ busy, error, onSignIn, onSignUp }: OnboardingFl
           <Pressable accessibilityLabel="開始使用" accessibilityRole="button" onPress={advance} style={({ pressed }) => [figmaWalletShared.button, pressed && figmaWalletShared.pressed]}><Text style={figmaWalletShared.buttonText}>開始使用</Text></Pressable>
         </View> : null}
         {screen === 'auth' ? <View style={styles.authCard}>
-          <Text style={styles.authTitle}>歡迎使用</Text><Text style={styles.authBody}>登入或建立帳戶後，即可使用你的多鏈充值錢包。</Text>
+          <Text style={styles.authTitle}>歡迎使用</Text><Text style={styles.authBody}>這是測試網預覽。登入後可配置多鏈充值地址；不得轉入主網資產，也不能保管真實資金。</Text>
           {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
           <Pressable accessibilityLabel="登入 hidotpay" accessibilityRole="button" disabled={busy} onPress={onSignIn} style={({ pressed }) => [figmaWalletShared.button, busy && styles.disabled, pressed && figmaWalletShared.pressed]}>{busy ? <ActivityIndicator color={figmaWallet.colors.black} /> : <Text style={figmaWalletShared.buttonText}>登入</Text>}</Pressable>
           <Pressable accessibilityLabel="建立 hidotpay 帳戶" accessibilityRole="button" disabled={busy} onPress={onSignUp} style={({ pressed }) => [styles.outlineButton, busy && styles.disabled, pressed && figmaWalletShared.pressed]}><Text style={styles.outlineButtonText}>建立帳戶</Text></Pressable>

@@ -1,5 +1,9 @@
 # 更新紀錄
 
+## 0.2.68 — 2026-08-16
+
+- 未登入引導與登入頁標明「測試網預覽」，並寫清楚不得轉入主網資產。這是受邀測試用戶可開的預覽，不是主網託管上線。
+
 ## 0.2.67 — 2026-08-16
 
 - 依 `wallet_security_plan.md` §21 第一版清單補齊 15 條產品鏈：Ethereum、BNB Chain、Polygon、Arbitrum、Optimism、Base、Avalanche C-Chain、Linea、Scroll、TRON、Bitcoin、Solana、TON、XRP Ledger、Stellar。錢包可為每一條鏈配置真實充值地址；主網與提領維持關閉。
